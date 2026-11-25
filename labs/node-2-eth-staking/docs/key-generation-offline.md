@@ -8,7 +8,7 @@
 | 工具 | ethstaker-deposit-cli v1.3.0（原 staking-deposit-cli 的社区后继版本，Lighthouse 文档和 Launchpad 都指向它） |
 | 下载 | https://github.com/ethstaker/ethstaker-deposit-cli/releases |
 | 文档 | https://deposit-cli.ethstaker.cc |
-| 校验 | `gh attestation verify <文件名> --repo ethstaker/ethstaker-deposit-cli`，看到 `Verification succeeded!` 才继续 |
+| 校验 | 先核对 sha256（`.sha256` 文件里只有哈希值，见下），再用 `gh attestation verify <文件名> --repo ethstaker/ethstaker-deposit-cli`，看到 `Verification succeeded!` 才继续 |
 
 以官方文档最新版本为准。
 
@@ -19,15 +19,22 @@
 
 ## 2. 生成
 ```bash
-# [ops@offline ~]$  断网后执行
+# ops@lab-dev:~$  联网时下载并校验（写作时 v1.3.0 的文件名带提交号 d8016bc）
+v=v1.3.0; f=ethstaker_deposit-cli-d8016bc-linux-amd64.tar.gz
+curl -LO https://github.com/ethstaker/ethstaker-deposit-cli/releases/download/$v/$f
+curl -LO https://github.com/ethstaker/ethstaker-deposit-cli/releases/download/$v/$f.sha256
+echo "$(cat $f.sha256)  $f" | sha256sum -c -        # 输出 "<文件名>: OK"
+gh attestation verify $f --repo ethstaker/ethstaker-deposit-cli
+
+# ops@offline:~$  拷到离线机器、断网后执行
 tar xzf ethstaker_deposit-cli-*-linux-amd64.tar.gz
 cd ethstaker_deposit-cli-*-linux-amd64
-./deposit new-mnemonic --chain hoodi --num_validators 1 --regular_withdrawal \
+./deposit new-mnemonic --chain hoodi --num_validators 1 --regular-withdrawal \
   --withdrawal_address 0x<你控制的 Hoodi 测试网地址> --folder ~/staking
 ```
 参数说明：
 - `--chain hoodi`：写错网络生成的存款数据在 Launchpad 上会被拒绝；主网是 `mainnet`。
-- `--regular_withdrawal`：生成 0x01 类型（最大有效余额 32 ETH）验证者，和大多数教程一致。不加时默认生成 0x02 复利型（最大有效余额 2048 ETH，可以用 `--amount` 指定存款金额）。
+- `--regular-withdrawal`（连字符，不是下划线）：生成 0x01 类型（最大有效余额 32 ETH）验证者，和大多数教程一致。v1.3.0 的默认值就是它，显式写上是为了不依赖默认值；要 0x02 复利型（最大有效余额 2048 ETH，可以用 `--amount` 指定存款金额）改用 `--compounding`。
 - `--withdrawal_address`：取款地址，一旦上链**不能修改**，必须是你自己完全控制的地址。
 - 不要把 `--keystore_password` 写在命令行上：会留在 shell 历史里。让工具交互式提示输入。
 

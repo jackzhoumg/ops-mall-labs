@@ -2,7 +2,7 @@
 
 对应教程：《DevOps 运维实战》进阶 SRE-6 集群安全加固
 
-写作时版本：Trivy 0.76.2，kube-bench 0.16.0（CIS Kubernetes Benchmark cis-2.0），Falco 0.45.2（Helm Chart 9.2.2），cosign 3.1.4。以官方最新文档为准。
+写作时版本：Trivy 0.76.2，kube-bench 0.16.0（CIS Kubernetes Benchmark cis-2.0），Falco 0.45.2（Helm Chart 9.2.2），cosign 3.1.5，集群按 Kubernetes v1.37、节点 Ubuntu 24.04。以官方最新文档为准。
 
 前提：Lab 04 的 Harbor、Lab 05-06 的集群和 mall 应用、Lab 07 的流水线、Lab 09 的监控已经可用。kubectl 命令默认在 k8s-master 上执行。
 
@@ -46,3 +46,15 @@ kubectl -n mall rollout undo deployment/mall-api                        # 撤销
 helm uninstall falco -n falco
 kubectl delete ns kube-bench
 ```
+
+## 验证记录
+
+已验证：
+
+- Trivy 0.76.2 用官方 APT 源（DEB822 写法，`Suites: generic`）在 Ubuntu 24.04 上安装成功，`trivy --version` 输出 `Version: 0.76.2`
+- kube-bench：确认最新版 v0.16.0 和 main 分支的 `cfg/config.yaml` 版本映射最高只到 1.35（`cis-2.0`），所以 Job 继续写死 `--benchmark cis-2.0`
+- CKS 考点按 cncf/curriculum 仓库的 `CKS_Curriculum v1.37.pdf` 更新（各领域权重：Cluster Setup 15%、Cluster Hardening 15%、System Hardening 10%、Minimize Microservice Vulnerabilities 20%、Supply Chain Security 20%、Monitoring, Logging and Runtime Security 20%）
+- 加固补丁增加 `appArmorProfile: RuntimeDefault`（Ubuntu 节点默认启用 AppArmor）
+- 所有 YAML 语法检查通过，脚本 `shellcheck` + `bash -n` 通过
+
+没有验证：RBAC、Pod Security、NetworkPolicy、kube-bench Job、Falco、`trivy k8s` 等所有 K8s 部分（按要求不连集群）；cosign 签名需要 Harbor，没有跑；Trivy 扫描需要下载漏洞库和 Harbor 镜像，没有跑。

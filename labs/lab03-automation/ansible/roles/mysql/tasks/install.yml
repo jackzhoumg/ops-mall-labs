@@ -1,22 +1,30 @@
-- name: 添加 MySQL 8.4 官方仓库
-  ansible.builtin.yum_repository:
-    name: mysql84-community
-    description: MySQL 8.4 LTS Community Server
-    baseurl: "{{ mysql_repo_baseurl }}"
-    gpgcheck: true
-    gpgkey: "{{ mysql_repo_gpgkey }}"
-    enabled: true
+# 用 DEB822 格式（.sources 文件）添加源，公钥放在 /etc/apt/keyrings，只给这个源用。
+# 不要再用 apt-key：Ubuntu 24.04 已经废弃，而且它把公钥加给所有源，等于让这把钥匙能给任何包签名
+- name: 添加 MySQL 8.4 LTS 官方 APT 源
+  ansible.builtin.deb822_repository:
+    name: mysql
+    types: deb
+    uris: "{{ mysql_apt_uri }}"
+    suites: "{{ ansible_facts['distribution_release'] }}"
+    components: "{{ mysql_apt_component }}"
+    signed_by: "{{ mysql_apt_key_url }}"
+    state: present
+  register: mysql_repo
 
+# 装 mysql-community-server 而不是 mysql-server：Ubuntu 自己的源里也有 mysql-server（8.0），
+# 官方源没加成功（比如公钥过期）时，写 mysql-server 会悄悄装成 Ubuntu 的 8.0，写全名会直接报错
 - name: 安装 MySQL 和 Ansible 连接 MySQL 用的 PyMySQL
-  ansible.builtin.dnf:
+  ansible.builtin.apt:
     name:
       - mysql-community-server
-      - python3-PyMySQL
+      - python3-pymysql
     state: present
+    update_cache: "{{ mysql_repo is changed }}"
 
 - name: 防火墙只对实验网段开放 3306
-  ansible.posix.firewalld:
-    rich_rule: 'rule family="ipv4" source address="{{ lab_network }}" port port="{{ mysql_port }}" protocol="tcp" accept'
-    permanent: true
-    immediate: true
-    state: enabled
+  community.general.ufw:
+    rule: allow
+    src: "{{ lab_network }}"
+    port: "{{ mysql_port | string }}"
+    proto: tcp
+    comment: mysql

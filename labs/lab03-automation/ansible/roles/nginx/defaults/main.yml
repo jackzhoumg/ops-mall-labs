@@ -1,3 +1,7 @@
+# Nginx 用 nginx.org 官方 stable 源（和 Lab 02 一致），写作时 1.30.x。
+# Ubuntu 24.04 自带的是 1.24，版本旧，配置文件布局也不一样（sites-enabled）
+nginx_apt_uri: https://nginx.org/packages/ubuntu
+nginx_apt_key_url: https://nginx.org/keys/nginx_signing.key
 nginx_ssl_dir: /etc/nginx/ssl
 nginx_web_root: /usr/share/nginx/mall
 # 自签证书在控制节点生成一次，再拷到所有 web 机器：两台用同一张证书，VIP 漂移后浏览器不会再报一次证书变化

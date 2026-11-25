@@ -23,7 +23,7 @@ CRT="${OUT_DIR}/${DOMAIN}.crt"
 KEY="${OUT_DIR}/${DOMAIN}.key"
 CNF="${OUT_DIR}/openssl-san.cnf"
 
-command -v openssl >/dev/null || { echo "找不到 openssl，先 dnf install -y openssl" >&2; exit 1; }
+command -v openssl >/dev/null || { echo "找不到 openssl，先 sudo apt install -y openssl" >&2; exit 1; }
 
 mkdir -p "$OUT_DIR"
 

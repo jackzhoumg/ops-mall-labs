@@ -26,7 +26,7 @@ if [[ "$rota" == "1" ]]; then bad "$dev 是机械盘，同步会追不上链，�
 if timedatectl show -p NTPSynchronized --value 2>/dev/null | grep -q yes; then
   ok "时间已同步（NTP）"
 else
-  bad "时间没有同步：sudo systemctl enable --now chronyd（Ubuntu: chrony）。共识层对时间很敏感"
+  bad "时间没有同步：先看 timedatectl；建议 sudo apt install -y chrony（会替换掉默认的 systemd-timesyncd）。共识层对时间很敏感"
 fi
 
 for p in 30303 9000; do

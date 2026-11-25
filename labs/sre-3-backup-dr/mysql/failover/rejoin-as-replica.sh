@@ -26,8 +26,8 @@ q 'SET PERSIST super_read_only = ON'
 log "本机已设为只读"
 
 # 2. 检查 errant transaction
-mine="$(q 'SELECT @@gtid_executed' | tr -d '\n')"
-theirs="$(qs 'SELECT @@gtid_executed' | tr -d '\n')"
+mine="$(q "SELECT REPLACE(@@gtid_executed, CHAR(10), '')")"
+theirs="$(qs "SELECT REPLACE(@@gtid_executed, CHAR(10), '')")"
 errant="$(q "SELECT GTID_SUBTRACT('${mine}', '${theirs}')")"
 if [[ -n "$errant" ]]; then
   log "发现只在本机执行过、新主库没有的事务：${errant}"

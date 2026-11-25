@@ -1,0 +1,17 @@
+# rclone 连接 SeaweedFS S3 网关的配置。
+# lab-db1：复制到 /etc/mall-backup/rclone.conf（权限 600），填备份账号 mall-mysql-backup 的密钥
+# lab-dev：复制到 ~/.config/rclone/rclone.conf（权限 600），恢复时用（可以填管理员账号或备份账号，备份账号能读不能删）
+#
+# 写作时 rclone v1.76.0。Ubuntu 24.04 自带源里的 rclone 是 1.60，太旧，用官方 deb 包安装：
+#   curl -LO https://downloads.rclone.org/v1.76.0/rclone-v1.76.0-linux-amd64.deb   # arm64 换成 linux-arm64
+#   sudo apt install ./rclone-v1.76.0-linux-amd64.deb
+[s3backup]
+type = s3
+# SeaweedFS 在 rclone 里有专门的 provider 名字；写 Other 也能用
+provider = SeaweedFS
+endpoint = http://192.168.56.15:8333
+access_key_id = mall-mysql-backup
+secret_access_key = <换成你的密钥>
+region = us-east-1
+# 不检查、不自动创建桶：桶由管理员提前建好，备份账号没有建桶权限
+no_check_bucket = true

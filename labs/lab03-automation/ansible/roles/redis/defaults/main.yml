@@ -1,11 +1,17 @@
-# Rocky Linux 9 AppStream 自带的 redis 包（写作时 6.2.x），配置文件 /etc/redis/redis.conf
+# Redis 用官方 APT 源 packages.redis.io（和 Lab 02 一致），写作时 noble 上最新是 8.12.0。
+# Ubuntu 24.04 universe 里的 redis-server 是 7.0，版本旧；官方包的版本号带 epoch 6，比 Ubuntu 的 5 高，apt 自动选官方源。
+# 配置文件 /etc/redis/redis.conf（属主 redis:redis、权限 640），服务名 redis-server，数据目录 /var/lib/redis
+redis_apt_uri: https://packages.redis.io/deb
+redis_apt_key_url: https://packages.redis.io/gpg
+# 装完检查大版本，防止官方源没加成功、悄悄装成了 Ubuntu 自带的 7.0
+redis_major_version: "8"
+redis_service: redis-server
 redis_conf: /etc/redis/redis.conf
 # 只监听本机和内网地址，不要监听 0.0.0.0 暴露到公网
 redis_bind: "127.0.0.1 {{ ansible_host }}"
 redis_maxmemory: 256mb
 redis_maxmemory_policy: allkeys-lru
-
-# 用 lineinfile 只改关键配置项，保留发行版自带的其余默认值
+# 用 lineinfile 只改关键配置项，保留包自带的其余默认值
 redis_settings:
   - { key: bind, value: "{{ redis_bind }}" }
   - { key: port, value: "{{ redis_port }}" }
@@ -14,3 +20,6 @@ redis_settings:
   - { key: maxmemory, value: "{{ redis_maxmemory }}" }
   - { key: maxmemory-policy, value: "{{ redis_maxmemory_policy }}" }
   - { key: appendonly, value: "yes" }
+# Redis 建议 vm.overcommit_memory=1，避免后台持久化 fork 失败。
+# vm.* 是整台机器（内核）级别的参数：在特权容器里做实验时设成 false，否则改到的是宿主机
+redis_set_overcommit_memory: true

@@ -28,14 +28,18 @@
           {{ hostvars[h].private_ip | default(hostvars[h].ansible_host) }} {{ h }}
           {% endfor %}
 
+    # Ubuntu 24.04 云镜像。新机器的 apt 索引可能是旧的，先更新（1 小时内更新过就跳过）
     - name: 安装常用工具
-      ansible.builtin.dnf:
+      ansible.builtin.apt:
         name: [chrony, vim, curl, tar, bash-completion]
         state: present
+        update_cache: true
+        cache_valid_time: 3600
 
+    # 装 chrony 时 apt 会自动卸掉 systemd-timesyncd（两者冲突），时间同步改由 chrony 负责
     - name: 时间同步
       ansible.builtin.service:
-        name: chronyd
+        name: chrony
         state: started
         enabled: true
 

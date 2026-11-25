@@ -21,11 +21,17 @@
         target: /root/mall-init.sql
         login_unix_socket: "{{ mysql_socket }}"
 
+# MySQL 8.4 默认不加载 mysql_native_password 插件，而 mysql_user 模块的 password 参数在 9.7 以前
+# 走的是 mysql_native_password，会报 Plugin 'mysql_native_password' is not loaded。
+# 所以显式用 caching_sha2_password + plugin_auth_string。这个插件每次生成哈希都用随机盐，
+# 模块没法判断密码变没变，每次都会 ALTER USER（不幂等）；给一个固定的 20 位 salt，模块就能算出同样的哈希来比较
 - name: 应用账号（密码以 vault 为准，覆盖 init.sql 里的默认密码）
   ansible.mysql.mysql_user:
     name: "{{ mall_db_user }}"
     host: "%"
-    password: "{{ mall_db_password }}"
+    plugin: caching_sha2_password
+    plugin_auth_string: "{{ mall_db_password }}"
+    salt: "{{ (mall_db_user ~ mysql_salt_suffix) | hash('sha1') | truncate(20, true, '', 0) }}"
     priv: "{{ mall_db_name }}.*:SELECT,INSERT,UPDATE,DELETE"
     login_unix_socket: "{{ mysql_socket }}"
     state: present
@@ -35,7 +41,9 @@
   ansible.mysql.mysql_user:
     name: "{{ mysql_repl_user }}"
     host: "{{ mysql_repl_host }}"
-    password: "{{ mysql_repl_password }}"
+    plugin: caching_sha2_password
+    plugin_auth_string: "{{ mysql_repl_password }}"
+    salt: "{{ (mysql_repl_user ~ mysql_salt_suffix) | hash('sha1') | truncate(20, true, '', 0) }}"
     priv: "*.*:REPLICATION SLAVE"
     login_unix_socket: "{{ mysql_socket }}"
     state: present
@@ -46,7 +54,9 @@
   ansible.mysql.mysql_user:
     name: "{{ mysql_backup_user }}"
     host: localhost
-    password: "{{ mysql_backup_password }}"
+    plugin: caching_sha2_password
+    plugin_auth_string: "{{ mysql_backup_password }}"
+    salt: "{{ (mysql_backup_user ~ mysql_salt_suffix) | hash('sha1') | truncate(20, true, '', 0) }}"
     priv: "*.*:SELECT,SHOW VIEW,TRIGGER,LOCK TABLES,EVENT,RELOAD,REPLICATION CLIENT,PROCESS"
     login_unix_socket: "{{ mysql_socket }}"
     state: present

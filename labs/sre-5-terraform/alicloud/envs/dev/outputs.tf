@@ -10,7 +10,7 @@ output "instance_type" {
 
 output "image" {
   description = "使用的系统镜像"
-  value       = data.alicloud_images.rocky9.images[0].name
+  value       = data.alicloud_images.ubuntu2404.images[0].name
 }
 
 output "servers" {

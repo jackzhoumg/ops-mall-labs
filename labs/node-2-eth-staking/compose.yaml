@@ -87,7 +87,7 @@ services:
       - ${DATA_DIR:-/data/eth}/jwt:/jwt:ro
 
   mev-boost:
-    image: ${MEV_BOOST_IMAGE:-flashbots/mev-boost:1.12}
+    image: ${MEV_BOOST_IMAGE:-flashbots/mev-boost:1.12.0}
     container_name: mev-boost
     restart: unless-stopped
     command:

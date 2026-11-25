@@ -9,9 +9,8 @@ source "${SCRIPT_DIR}/../lib.sh"
 require_root
 require_deployed
 
-if firewall-cmd --state >/dev/null 2>&1; then
-  firewall-cmd --quiet --permanent --add-port=8080/tcp
-  firewall-cmd --quiet --reload
+if ufw status | grep -q '^Status: active'; then
+  ufw allow 8080/tcp >/dev/null
 fi
 set_env MALL_LISTEN ":8080"
 restart_service

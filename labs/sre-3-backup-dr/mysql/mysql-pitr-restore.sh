@@ -10,7 +10,7 @@
 #   EXCLUDE_GTIDS='3e11fa47-71ca-11e1-9e33-c80aa9429562:1234' bash mysql/mysql-pitr-restore.sh
 #
 # 环境变量：
-#   RCLONE_REMOTE   默认 minio:mysql-backup
+#   RCLONE_REMOTE   默认 s3backup:mysql-backup
 #   RCLONE_CONFIG   默认 ~/.config/rclone/rclone.conf（rclone 自己的默认值）
 #   HOST_TAG        备份来源实例，默认 lab-db1
 #   WORKDIR         下载和恢复的工作目录，默认 /data/pitr
@@ -18,14 +18,16 @@
 #   STOP_DATETIME   重放到这个时间为止（服务器本地时间，格式 YYYY-mm-dd HH:MM:SS）
 #   EXCLUDE_GTIDS   重放时跳过的 GTID（和 STOP_DATETIME 至少给一个）
 #   RESTORE_MODE    docker（默认）或 local（恢复到 LOCAL_MYSQL 指向的已有空实例）
-#   DOCKER_IMAGE    默认 mysql:8.4（版本不能低于源库）
+#   DOCKER_IMAGE    默认 mysql:8.4（版本不能低于源库）。写作时这个镜像里没有 mysqlbinlog，
+#                   脚本会改用本机的 mysqlbinlog：lab-dev 上先加 MySQL 官方 APT 源，
+#                   sudo apt install mysql-community-server-core（只装程序文件，不会启动 mysqld）
 #   RESTORE_PORT    Docker 模式暴露的端口，默认 3307
 #   RESTORE_ROOT_PASSWORD  Docker 模式临时实例的 root 密码，默认 PitrRoot123
 #   LOCAL_MYSQL     local 模式连接临时实例的参数，如 "-h127.0.0.1 -P3307 -uroot"
-#   SKIP_DOWNLOAD   1 = 不从 MinIO 下载，直接用 WORKDIR 里已有的文件
+#   SKIP_DOWNLOAD   1 = 不从对象存储下载，直接用 WORKDIR 里已有的文件
 set -euo pipefail
 
-RCLONE_REMOTE="${RCLONE_REMOTE:-minio:mysql-backup}"
+RCLONE_REMOTE="${RCLONE_REMOTE:-s3backup:mysql-backup}"
 HOST_TAG="${HOST_TAG:-lab-db1}"
 WORKDIR="${WORKDIR:-/data/pitr}"
 FULL_BACKUP="${FULL_BACKUP:-}"
@@ -137,12 +139,22 @@ if [[ "$RESTORE_MODE" == "docker" ]]; then
   docker exec -e MYSQL_PWD="$RESTORE_ROOT_PASSWORD" "$CONTAINER" mysql -uroot -h127.0.0.1 -N -e 'SELECT VERSION()' \
     || die "临时实例没有就绪：docker logs $CONTAINER"
   rmysql() { docker exec -i -e MYSQL_PWD="$RESTORE_ROOT_PASSWORD" "$CONTAINER" mysql -uroot -h127.0.0.1 "$@"; }
-  rbinlog() { docker exec "$CONTAINER" mysqlbinlog --no-defaults "$@"; }
-  binlog_path=/backup/binlog
-  # 容器里是 UTC 时区，mysqlbinlog 按它所在环境的时区解释 --stop-datetime，所以先换算成 UTC
-  if [[ -n "$STOP_DATETIME" ]]; then
-    stop_for_binlog="$(date -u -d "$STOP_DATETIME" '+%F %T')"
+  # 写作时的 mysql:8.4 官方镜像里已经没有 mysqlbinlog。镜像里有就用镜像里的，没有就用本机的
+  if docker exec "$CONTAINER" sh -c 'command -v mysqlbinlog' >/dev/null 2>&1; then
+    rbinlog() { docker exec "$CONTAINER" mysqlbinlog --no-defaults "$@"; }
+    binlog_path=/backup/binlog
+    # 容器里是 UTC 时区，mysqlbinlog 按它所在环境的时区解释 --stop-datetime，所以先换算成 UTC
+    if [[ -n "$STOP_DATETIME" ]]; then
+      stop_for_binlog="$(date -u -d "$STOP_DATETIME" '+%F %T')"
+    fi
+  elif command -v mysqlbinlog >/dev/null; then
+    rbinlog() { mysqlbinlog --no-defaults "$@"; }
+    binlog_path="$WORKDIR/binlog"
+    stop_for_binlog="$STOP_DATETIME"
+  else
+    die "镜像和本机都没有 mysqlbinlog。在本机装 MySQL 官方 APT 源的 mysql-community-server-core（只装程序，不会启动 mysqld），版本不低于源库"
   fi
+  log "mysqlbinlog：$(rbinlog --version | head -n 1)"
 else
   read -r -a local_args <<< "$LOCAL_MYSQL"
   rmysql() { mysql "${local_args[@]}" "$@"; }

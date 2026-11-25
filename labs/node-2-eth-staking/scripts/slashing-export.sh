@@ -5,6 +5,8 @@
 # 输出：$VC_DATA_DIR/slashing-protection-<时间>.json 及其 sha256
 set -euo pipefail
 # shellcheck source=common.sh
+# common.sh 和本脚本在同一目录，单独做 shellcheck
+# shellcheck disable=SC1091
 source "$(dirname "$0")/common.sh"
 
 confirm "将停止本机 lighthouse-vc 并导出 slashing protection 数据。停止后验证者会开始离线扣分。"

@@ -1,0 +1,29 @@
+# SeaweedFS 单机服务（weed mini：master + volume + filer + S3 网关在一个进程里），由 install-seaweedfs.sh 安装。
+# 只保留备份需要的 S3 网关：关掉 WebDAV、Iceberg、Lance 端口；管理界面默认只监听 127.0.0.1。
+[Unit]
+Description=SeaweedFS object storage (lab backup target)
+Documentation=https://github.com/seaweedfs/seaweedfs/wiki/Quick-Start-with-weed-mini
+Wants=network-online.target
+After=network-online.target
+AssertFileIsExecutable=/usr/local/bin/weed
+[Service]
+Type=simple
+User=seaweedfs
+Group=seaweedfs
+ExecStart=/usr/local/bin/weed mini -dir=/data/seaweedfs \
+  -s3.config=/etc/seaweedfs/s3.json \
+  -bucket=velero,mysql-backup \
+  -webdav=false -s3.port.iceberg=0 -s3.port.lance=0
+# 改了 /etc/seaweedfs/s3.json（加账号、换密钥）后：sudo systemctl reload seaweedfs
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=on-failure
+RestartSec=5
+LimitNOFILE=65536
+# 最小权限：只能写自己的数据目录
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/data/seaweedfs
+[Install]
+WantedBy=multi-user.target

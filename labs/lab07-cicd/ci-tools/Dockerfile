@@ -2,10 +2,10 @@
 # 构建并推到 Harbor（在 lab-ci 上执行，构建上下文是本目录）：
 #   sudo docker build -t harbor.lab.local/library/ci-tools:v1.0.0 labs/lab07-cicd/ci-tools
 #   sudo docker push harbor.lab.local/library/ci-tools:v1.0.0
-# kubectl 小版本要和集群一致（课程集群 v1.36），最多差一个小版本
+# kubectl 小版本要和集群一致（课程集群 v1.37），最多差一个小版本
 FROM alpine:3.24
 
-ARG KUBECTL_VERSION=v1.36.0
+ARG KUBECTL_VERSION=v1.37.2
 ARG YQ_VERSION=v4.54.3
 ARG TARGETARCH=amd64
 

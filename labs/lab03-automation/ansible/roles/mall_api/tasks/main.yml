@@ -19,7 +19,7 @@
   ansible.builtin.user:
     name: "{{ mall_api_user }}"
     system: true
-    shell: /sbin/nologin
+    shell: /usr/sbin/nologin
     create_home: false
 
 - name: 程序和配置目录
@@ -63,11 +63,12 @@
   notify: restart mall-api
 
 - name: 防火墙对实验网段开放 8080（另一台 Nginx 会反代过来）
-  ansible.posix.firewalld:
-    rich_rule: 'rule family="ipv4" source address="{{ lab_network }}" port port="{{ mall_api_port }}" protocol="tcp" accept'
-    permanent: true
-    immediate: true
-    state: enabled
+  community.general.ufw:
+    rule: allow
+    src: "{{ lab_network }}"
+    port: "{{ mall_api_port | string }}"
+    proto: tcp
+    comment: mall-api
 
 - name: 启动 mall-api
   ansible.builtin.systemd_service:

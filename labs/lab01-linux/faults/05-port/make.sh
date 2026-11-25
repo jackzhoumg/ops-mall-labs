@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 故障 5：端口不通。两种原因任选一种：
-#   firewall  firewalld 没放行 8080
+#   firewall  ufw 没放行 8080（ufw 默认策略是丢弃，客户端表现为超时）
 #   bind      服务只监听在 127.0.0.1，外面访问不到
 # 用法：sudo bash make.sh firewall|bind
 # 对应教程：Lab 01 第 5.5 节 故障 5
@@ -15,9 +15,9 @@ mode=${1:-}
 
 case "${mode}" in
   firewall)
-    firewall-cmd --state >/dev/null 2>&1 || die "firewalld 没有运行，这个场景需要 firewalld（systemctl start firewalld）"
-    firewall-cmd --quiet --permanent --remove-port=8080/tcp || true
-    firewall-cmd --quiet --reload
+    ufw status | grep -q '^Status: active' || die "ufw 没有启用，先按教程 5.2 节第 4 步放行 22 和 8080 并启用 ufw"
+    # 只删 8080 这一条规则，22 端口的规则不动，SSH 不会断
+    ufw delete allow 8080/tcp >/dev/null 2>&1 || true
     ;;
   bind)
     set_env MALL_LISTEN "127.0.0.1:8080"

@@ -105,11 +105,11 @@ tests:
   # 5. 磁盘每小时少 1GiB，总共 20GiB 剩 6GiB（30%）：预测 24 小时内写满
   - interval: 1m
     input_series:
-      - series: 'node_filesystem_avail_bytes{job="vm-node", hostname="lab-db1", instance="192.168.56.13:9100", mountpoint="/", fstype="xfs", device="/dev/sda1"}'
+      - series: 'node_filesystem_avail_bytes{job="vm-node", hostname="lab-db1", instance="192.168.56.13:9100", mountpoint="/", fstype="ext4", device="/dev/mapper/ubuntu--vg-ubuntu--lv"}'
         values: '12884901888-17895697x480'
-      - series: 'node_filesystem_size_bytes{job="vm-node", hostname="lab-db1", instance="192.168.56.13:9100", mountpoint="/", fstype="xfs", device="/dev/sda1"}'
+      - series: 'node_filesystem_size_bytes{job="vm-node", hostname="lab-db1", instance="192.168.56.13:9100", mountpoint="/", fstype="ext4", device="/dev/mapper/ubuntu--vg-ubuntu--lv"}'
         values: '21474836480x480'
-      - series: 'node_filesystem_readonly{job="vm-node", hostname="lab-db1", instance="192.168.56.13:9100", mountpoint="/", fstype="xfs", device="/dev/sda1"}'
+      - series: 'node_filesystem_readonly{job="vm-node", hostname="lab-db1", instance="192.168.56.13:9100", mountpoint="/", fstype="ext4", device="/dev/mapper/ubuntu--vg-ubuntu--lv"}'
         values: '0x480'
     alert_rule_test:
       - eval_time: 7h
@@ -121,8 +121,8 @@ tests:
               hostname: lab-db1
               instance: "192.168.56.13:9100"
               mountpoint: /
-              fstype: xfs
-              device: /dev/sda1
+              fstype: ext4
+              device: /dev/mapper/ubuntu--vg-ubuntu--lv
             exp_annotations:
               summary: "lab-db1 分区 / 预计 24 小时内写满"
               description: "按最近 6 小时的写入速度推算，24 小时内会写满。查日志是否没轮转、备份文件是否没清理。"

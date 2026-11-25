@@ -3,6 +3,8 @@
 # 用法（新机器）：bash scripts/slashing-import.sh /path/to/slashing-protection-xxx.json
 set -euo pipefail
 # shellcheck source=common.sh
+# common.sh 和本脚本在同一目录，单独做 shellcheck
+# shellcheck disable=SC1091
 source "$(dirname "$0")/common.sh"
 
 src="${1:?用法：bash scripts/slashing-import.sh <交换文件.json>}"

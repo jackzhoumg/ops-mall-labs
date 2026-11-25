@@ -158,11 +158,15 @@ type redisCache struct{ c *redis.Client }
 
 func newRedisCache(addr, password string) *redisCache {
 	return &redisCache{c: redis.NewClient(&redis.Options{
-		Addr:         addr,
-		Password:     password,
-		DialTimeout:  2 * time.Second,
-		ReadTimeout:  time.Second,
-		WriteTimeout: time.Second,
+		Addr:     addr,
+		Password: password,
+		// 缓存只是加速手段：Redis 不可用时要快速失败、回退到数据库，不能拖慢接口
+		DialTimeout:  500 * time.Millisecond,
+		ReadTimeout:  300 * time.Millisecond,
+		WriteTimeout: 300 * time.Millisecond,
+		MaxRetries:   -1, // 命令失败不重试（go-redis 里 -1 表示关闭重试）
+		// 建连失败也只试一次（默认会重试 5 次，Redis 挂掉时每个请求要多等 2-3 秒）
+		DialerRetries: 1,
 	})}
 }
 

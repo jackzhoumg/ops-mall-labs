@@ -1,9 +1,9 @@
-- name: 只支持 Rocky Linux / RHEL 9 系
+- name: 只支持 Ubuntu 24.04
   ansible.builtin.assert:
     that:
-      - ansible_facts['os_family'] == 'RedHat'
-      - ansible_facts['distribution_major_version'] == '9'
-    fail_msg: "本角色按 Rocky Linux 9 编写，当前是 {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+      - ansible_facts['distribution'] == 'Ubuntu'
+      - ansible_facts['distribution_version'] == '24.04'
+    fail_msg: "本角色按 Ubuntu Server 24.04 LTS 编写，当前是 {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
 
 - name: 设置主机名
   ansible.builtin.hostname:
@@ -23,9 +23,12 @@
     name: "{{ lab_timezone }}"
 
 - name: 安装基础软件包
-  ansible.builtin.dnf:
+  ansible.builtin.apt:
     name: "{{ common_packages }}"
     state: present
+    # 一小时内更新过软件源索引就不再 apt update，第二次执行更快，也不会显示 changed
+    update_cache: true
+    cache_valid_time: 3600
 
 - name: 启动基础服务
   ansible.builtin.systemd_service:
@@ -33,9 +36,20 @@
     state: started
     enabled: true
   loop:
-    - chronyd
-    - crond
-    - firewalld
+    - chrony
+    - cron
+
+# ufw 默认策略是拒绝所有入站。先放行 SSH 再启用，顺序反了 Ansible 自己就断线了
+- name: 防火墙放行 SSH
+  community.general.ufw:
+    rule: allow
+    name: OpenSSH
+
+- name: 启用防火墙（默认拒绝入站）
+  community.general.ufw:
+    state: enabled
+    default: deny
+    direction: incoming
 
 - name: 内核参数
   ansible.posix.sysctl:

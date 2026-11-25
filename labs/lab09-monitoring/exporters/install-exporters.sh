@@ -60,19 +60,18 @@ fetch() {
 
 # ensure_user <用户名>：创建不能登录的系统用户，exporter 不用 root 跑
 ensure_user() {
-  id "$1" &>/dev/null || useradd --system --no-create-home --shell /sbin/nologin "$1"
+  id "$1" &>/dev/null || useradd --system --no-create-home --shell /usr/sbin/nologin "$1"
 }
 
-# open_port <端口>：firewalld 在运行时，只对实验网段放行
+# open_port <端口>：ufw 已启用时，只对实验网段放行。
+# ufw 没启用就不动它：远程登录的机器上贸然 ufw enable，没先放行 22 端口会把自己锁在外面。
 open_port() {
   local port="$1"
-  if systemctl is-active --quiet firewalld; then
-    firewall-cmd --permanent --add-rich-rule="rule family=ipv4 source address=${ALLOW_CIDR} port port=${port} protocol=tcp accept" >/dev/null
-    firewall-cmd --reload >/dev/null
-    log "firewalld 已放行 ${ALLOW_CIDR} -> ${port}/tcp"
-  elif command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
+  if command -v ufw &>/dev/null && ufw status | grep -q "Status: active"; then
     ufw allow from "$ALLOW_CIDR" to any port "$port" proto tcp >/dev/null
     log "ufw 已放行 ${ALLOW_CIDR} -> ${port}/tcp"
+  else
+    log "ufw 未启用，跳过防火墙配置"
   fi
 }
 
@@ -127,9 +126,9 @@ install_node() {
   tar -xzf "$WORKDIR/${pkg}.tar.gz" -C "$WORKDIR"
   install -m 0755 "$WORKDIR/${pkg}/node_exporter" /usr/local/bin/node_exporter
   ensure_user node_exporter
-  # 排除容器和虚拟文件系统的挂载点，减少无用的时间序列
+  # 排除虚拟文件系统、snap 和容器运行时的挂载点，减少无用的时间序列
   write_unit node_exporter node_exporter \
-    "/usr/local/bin/node_exporter --web.listen-address=:9100 --collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|var/lib/containers)(\$\$|/)"
+    "/usr/local/bin/node_exporter --web.listen-address=:9100 --collector.filesystem.mount-points-exclude=^/(dev|proc|run|sys|snap|var/lib/docker|var/lib/containers)(\$\$|/)"
   open_port 9100
   wait_metrics 9100 node_cpu_seconds_total
 }

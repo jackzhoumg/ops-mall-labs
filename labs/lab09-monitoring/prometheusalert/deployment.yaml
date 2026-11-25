@@ -1,0 +1,117 @@
+# Lab 09：PrometheusAlert 告警网关（Deployment + Service）
+# 项目地址：https://github.com/feiyu563/PrometheusAlert ，写作时版本 v5.0.0（镜像 feiyu563/prometheus-alert:v5.0.0），以官方 Releases 为准。
+#
+# 链路：Alertmanager --webhook--> PrometheusAlert --按模板渲染--> 企业微信 / 钉钉 / 飞书群机器人
+# 群机器人地址不放在这里，放在 Alertmanager 的 url_file 里（见 alertmanager-robots.example.yaml）。
+#
+# 数据：模板、告警记录存在容器里的 SQLite（/app/db）。这里用 emptyDir，Pod 重建后回到镜像自带的默认模板，
+# postStart 再把 Git 里的 ops-mall-templates.json 导入一次。模板只改 Git，不在页面上改。
+#
+# 安全：PrometheusAlert 的页面登录是 cookie 里存明文账号密码，模板导入接口不校验登录。
+# 所以只建 ClusterIP Service，不配 HTTPRoute；要看页面用 kubectl port-forward。
+#
+# 国内拉 Docker Hub 慢：先推到 harbor.lab.local/library/prometheus-alert:v5.0.0，再改下面的 image。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheusalert
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheusalert
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: prometheusalert
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: prometheusalert
+        app.kubernetes.io/part-of: ops-mall
+    spec:
+      containers:
+        - name: prometheusalert
+          image: feiyu563/prometheus-alert:v5.0.0
+          ports:
+            - name: http
+              containerPort: 8080
+          # 镜像的启动脚本把 PA_ 开头的环境变量写进 /app/conf/app.conf（PA_OPEN_WEIXIN 对应 open-weixin）
+          env:
+            - name: TZ
+              value: Asia/Shanghai
+            - name: PA_TITLE
+              value: ops-mall
+            - name: PA_LOGIN_USER
+              value: admin
+            - name: PA_LOGIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: prometheusalert-auth
+                  key: login_password
+            - name: PA_OPEN_WEIXIN
+              value: "1"
+            - name: PA_OPEN_DINGDING
+              value: "1"
+            - name: PA_OPEN_FEISHU
+              value: "0"
+            # 日志打到标准输出，kubectl logs 能看到每条消息的渲染结果和机器人的返回值
+            - name: PA_LOGTYPE
+              value: console
+          lifecycle:
+            postStart:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - >-
+                    for i in $(seq 1 30); do
+                    wget -qO- --header Content-Type:application/json
+                    --post-file=/templates/ops-mall-templates.json
+                    http://127.0.0.1:8080/template/import && exit 0;
+                    sleep 2; done; exit 1
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 20
+          resources:
+            requests:
+              cpu: 20m
+              memory: 48Mi
+            limits:
+              memory: 256Mi
+          volumeMounts:
+            - name: db
+              mountPath: /app/db
+            - name: templates
+              mountPath: /templates
+              readOnly: true
+      volumes:
+        - name: db
+          emptyDir: {}
+        - name: templates
+          configMap:
+            name: prometheusalert-templates
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheusalert
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: prometheusalert
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  selector:
+    app.kubernetes.io/name: prometheusalert
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

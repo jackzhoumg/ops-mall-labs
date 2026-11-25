@@ -1,9 +1,9 @@
 # GitLab Runner（Docker executor），在 lab-ci（192.168.56.16）上运行
 #   sudo mkdir -p /srv/gitlab-runner/config && cd labs/lab07-cicd/gitlab-runner && sudo docker compose up -d
-# 写作时版本：v19.6.0，Runner 主版本号建议与 GitLab 保持一致
+# 写作时版本：v19.6.1，Runner 主版本号建议与 GitLab 保持一致
 services:
   gitlab-runner:
-    image: gitlab/gitlab-runner:v19.6.0
+    image: gitlab/gitlab-runner:v19.6.1
     container_name: gitlab-runner
     restart: always
     environment:

@@ -3,7 +3,9 @@
 #   vi group_vars/all/vault.yml
 #   ansible-vault encrypt group_vars/all/vault.yml
 # 加密后的 vault.yml 可以提交到 Git，vault 密码本身不能提交。
-vault_mysql_root_password: "ChangeMe-Root-123"
+#
+# 没有 MySQL root 密码：Ubuntu 上 MySQL 官方 APT 包非交互安装时，root@localhost 用 auth_socket 插件，
+# 只有系统 root 用户能通过本机 socket 登录（sudo mysql），不用也不应该再设密码。
 # 课程约定的应用账号密码是 MallPass123（sql/init.sql 里也是它），这里保持一致；生产环境必须换掉
 vault_mall_db_password: "MallPass123"
 vault_mysql_repl_password: "ChangeMe-Repl-123"

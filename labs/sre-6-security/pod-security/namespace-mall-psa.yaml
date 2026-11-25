@@ -4,7 +4,7 @@
 # 第一步（观察）：kubectl apply -f namespace-mall-psa.yaml
 # 第二步（强制）：把下面 enforce 的值从 baseline 改成 restricted，再 apply 一次
 #
-# 版本标签写成 latest 表示跟随集群版本的策略定义；想锁定策略版本可以写成 v1.36。
+# 版本标签写成 latest 表示跟随集群版本的策略定义；想锁定策略版本可以写成 v1.37。
 apiVersion: v1
 kind: Namespace
 metadata:

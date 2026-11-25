@@ -37,7 +37,7 @@ spec:
           labels:
             severity: critical
           annotations:
-            summary: "{{ $labels.hostname }} 的 binlog 超过 15 分钟没有上传到 MinIO"
+            summary: "{{ $labels.hostname }} 的 binlog 超过 15 分钟没有上传到对象存储"
             description: "目标 RPO 是 5 分钟，当前已经 {{ $value | humanizeDuration }}。查看：journalctl -u mall-mysql-binlog-upload -n 50"
         # 指标整个没了：脚本没装、定时器没启用、textfile 目录配置错了
         - alert: MysqlBackupMetricsMissing

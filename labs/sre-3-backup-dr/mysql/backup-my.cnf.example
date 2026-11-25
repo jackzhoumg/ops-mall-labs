@@ -4,4 +4,4 @@
 [client]
 user=backup
 password=ChangeMe-Backup-123
-socket=/var/lib/mysql/mysql.sock
+socket=/var/run/mysqld/mysqld.sock

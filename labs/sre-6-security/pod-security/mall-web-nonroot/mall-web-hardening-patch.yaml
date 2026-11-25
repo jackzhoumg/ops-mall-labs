@@ -14,6 +14,10 @@ spec:
         runAsGroup: 101
         seccompProfile:
           type: RuntimeDefault
+        # Ubuntu 节点默认启用 AppArmor，containerd 默认给容器套 cri-containerd.apparmor.d 配置；
+        # 这里显式写出来（Kubernetes 1.30 引入、1.31 GA 的字段），避免以后被改成 Unconfined
+        appArmorProfile:
+          type: RuntimeDefault
       containers:
         - name: mall-web
           image: harbor.lab.local/mall/mall-web:v1.0.0-nonroot

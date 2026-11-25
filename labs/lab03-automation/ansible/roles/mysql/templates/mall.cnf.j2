@@ -1,12 +1,7 @@
 # {{ ansible_managed }}
-# 由 Ansible mysql 角色生成，手工修改会在下次执行 playbook 时被覆盖
-
+# 由 Ansible mysql 角色生成，手工修改会在下次执行 playbook 时被覆盖。
+# 只写我们要改的参数。datadir、socket、pid-file、log-error 由包自带的 mysqld.cnf 定义（同一目录），这里不重复写
 [mysqld]
-datadir={{ mysql_datadir }}
-socket={{ mysql_socket }}
-log-error=/var/log/mysqld.log
-pid-file=/var/run/mysqld/mysqld.pid
-
 bind-address={{ mysql_bind_address }}
 port={{ mysql_port }}
 # 不做 DNS 反查，避免 DNS 慢导致连接卡住；授权里只能用 IP
@@ -14,11 +9,12 @@ skip-name-resolve
 max_connections={{ mysql_max_connections }}
 character-set-server=utf8mb4
 collation-server=utf8mb4_0900_ai_ci
-
 innodb_buffer_pool_size={{ mysql_innodb_buffer_pool_size }}
 
 # ---- 复制 ----
 server-id={{ mysql_server_id }}
+# 不用 8.4 默认的 binlog 这个名字：装包时已经生成了 binlog.000001（那时 GTID 还没开）。
+# 换个新名字，从开启 GTID 之后才开始记，从库用 SOURCE_AUTO_POSITION 复制时不用操心旧文件里有没有不带 GTID 的事务
 log-bin=mysql-bin
 binlog_expire_logs_seconds={{ mysql_binlog_expire_seconds }}
 gtid_mode=ON
@@ -31,6 +27,7 @@ read_only=ON
 
 # ---- 慢查询 ----
 slow_query_log=ON
-# 放在数据目录里：mysql 用户有写权限，SELinux 标签也对
-slow_query_log_file={{ mysql_datadir }}/slow.log
+# 放在 /var/log/mysql 下：包自带的 AppArmor 配置（/etc/apparmor.d/usr.sbin.mysqld）只允许 mysqld 写
+# /var/lib/mysql 和 /var/log/mysql 这些目录，写到别处会被 AppArmor 拒绝，MySQL 起不来
+slow_query_log_file={{ mysql_log_dir }}/mysql-slow.log
 long_query_time={{ mysql_slow_query_seconds }}

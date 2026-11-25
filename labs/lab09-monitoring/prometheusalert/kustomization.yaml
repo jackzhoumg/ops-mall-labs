@@ -1,0 +1,13 @@
+# Lab 09：部署 PrometheusAlert。用法（k8s-master）：
+#   kubectl -n monitoring create secret generic prometheusalert-auth --from-literal=login_password='你自己的密码'
+#   kubectl apply -k prometheusalert/
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+resources:
+  - deployment.yaml
+configMapGenerator:
+  # 带哈希后缀：改了模板再 apply，ConfigMap 名字变化会自动触发 Deployment 滚动更新，postStart 重新导入
+  - name: prometheusalert-templates
+    files:
+      - ops-mall-templates.json

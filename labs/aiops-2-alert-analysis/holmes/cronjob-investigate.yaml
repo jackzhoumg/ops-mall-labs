@@ -1,0 +1,115 @@
+# AIOps-2（可选）：定时让 HolmesGPT 调查正在响的 critical 告警，结果经 PrometheusAlert 推到企业微信群。
+# 链路：CronJob（holmes investigate alertmanager --destination webhook）→ PrometheusAlert（模板 holmes-wx）→ 群机器人
+#
+# 前提：
+#   1. rbac-namespace-scoped.yaml 已 apply（复用 ServiceAccount holmes 的只读权限）
+#   2. Secret holmes-llm 已建（values.yaml 开头的命令）
+#   3. PrometheusAlert 已导入 prometheusalert-holmes-template.json 里的模板
+#   4. 建 Secret holmes-webhook，WEBHOOK_URL 里带着机器人 key，所以不写进 Git：
+#      kubectl -n monitoring create secret generic holmes-webhook --from-literal=WEBHOOK_URL='http://prometheusalert.monitoring.svc:8080/prometheusalert?type=wx&tpl=holmes-wx&wxurl=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=REPLACE_ME'
+#
+# 局限（教程 5.7 详细讲）：Holmes 命令行没有"冷却"，告警没恢复时每次运行都会再分析、再推一次。
+# 所以只分析 critical、每次最多 3 条、30 分钟一次；要"每条告警只分析一次"看原理拆解里的 alert-analyzer。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: holmes-cli-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: holmes
+    app.kubernetes.io/part-of: ops-mall
+data:
+  config.yaml: |
+    toolsets:
+      prometheus/metrics:
+        enabled: true
+        config:
+          prometheus_url: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+      grafana/loki:
+        enabled: true
+        config:
+          api_url: http://loki-gateway.logging.svc.cluster.local
+          additional_headers:
+            X-Scope-OrgID: mall
+      internet:
+        enabled: false
+      robusta:
+        enabled: false
+      bash:
+        enabled: false
+---
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: holmes-investigate
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: holmes
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  schedule: "*/30 * * * *"
+  timeZone: Asia/Shanghai
+  # 上一次还没跑完就跳过，防止告警风暴时任务堆积
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 0
+      activeDeadlineSeconds: 1200
+      ttlSecondsAfterFinished: 86400
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: holmes-investigate
+            app.kubernetes.io/part-of: ops-mall
+        spec:
+          serviceAccountName: holmes
+          restartPolicy: Never
+          containers:
+            - name: holmes
+              # 镜像入口是 python holmes_cli.py，args 就是 holmes 的子命令
+              image: robustadev/holmes:0.47.0
+              args:
+                - investigate
+                - alertmanager
+                - --alertmanager-url=http://kube-prometheus-stack-alertmanager.monitoring.svc:9093
+                - --alertmanager-label=severity=critical
+                - -n
+                - "3"
+                - --model=openai/your-chat-model
+                - --config=/etc/holmes/config.yaml
+                - --destination=webhook
+              env:
+                - name: SCOPED_NAMESPACES
+                  value: "mall,monitoring"
+                - name: OPENAI_API_BASE
+                  value: "https://llm.example.com/v1"
+                - name: OPENAI_API_KEY
+                  valueFrom:
+                    secretKeyRef:
+                      name: holmes-llm
+                      key: OPENAI_API_KEY
+                - name: WEBHOOK_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: holmes-webhook
+                      key: WEBHOOK_URL
+              volumeMounts:
+                - name: config
+                  mountPath: /etc/holmes
+                  readOnly: true
+              resources:
+                requests:
+                  cpu: 100m
+                  memory: 1Gi
+                limits:
+                  memory: 2Gi
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop: ["ALL"]
+          volumes:
+            - name: config
+              configMap:
+                name: holmes-cli-config

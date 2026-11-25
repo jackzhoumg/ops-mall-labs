@@ -1,0 +1,12 @@
+# /etc/apt/sources.list.d/redis.sources（lab-db1）
+# Redis 官方 APT 源 packages.redis.io，DEB822 格式。和 Lab 03 roles/redis/tasks/main.yml 生成的文件一致
+# 写作时 noble 上最新是 8.12.0（包版本 6:8.12.0-1rl1~noble1）；Ubuntu 24.04 自带的是 7.0，太旧
+#
+# 公钥：
+#   sudo install -d -m 755 /etc/apt/keyrings
+#   sudo curl -fsSL https://packages.redis.io/gpg -o /etc/apt/keyrings/redis.asc
+Types: deb
+URIs: https://packages.redis.io/deb
+Suites: noble
+Components: main
+Signed-By: /etc/apt/keyrings/redis.asc

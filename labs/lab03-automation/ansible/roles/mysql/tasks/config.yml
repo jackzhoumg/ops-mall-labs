@@ -1,56 +1,40 @@
-- name: 生成 my.cnf
+# Ubuntu 上 DEB 包安装时已经初始化好了数据目录，root@localhost 用 auth_socket 插件：
+# 系统 root 通过本机 socket 登录不用密码，其他人、其他主机怎么都登不上 root。
+# 所以这里不用像 RHEL 那样先 mysqld --initialize-insecure 再设 root 密码。
+- name: 生成 mall.cnf（只放我们改的参数，包自带的 mysqld.cnf 不动）
   ansible.builtin.template:
-    src: my.cnf.j2
-    dest: /etc/my.cnf
+    src: mall.cnf.j2
+    dest: "{{ mysql_conf_file }}"
     owner: root
     group: root
     mode: "0644"
-    backup: true
-  notify: restart mysqld
+  notify: restart mysql
 
-# 官方 RPM 第一次启动时会自动初始化数据目录，并把 root 临时密码写进 /var/log/mysqld.log，
-# 自动化不好取。这里先用 --initialize-insecure 初始化（root 无密码、只能本机 socket 登录），
-# 紧接着就设置 root 密码。creates 保证只在数据目录为空时执行一次（幂等）。
-- name: 初始化数据目录（只执行一次）
-  ansible.builtin.command:
-    cmd: mysqld --initialize-insecure --user=mysql --datadir={{ mysql_datadir }}
-    creates: "{{ mysql_datadir }}/mysql"
-  register: mysql_init
-
-- name: 修正数据目录的 SELinux 标签
-  ansible.builtin.command:
-    cmd: restorecon -R {{ mysql_datadir }}
-  when: mysql_init is changed
-
-- name: 启动 mysqld
+# 正常的 Ubuntu 服务器上 apt 装完会自动启动 MySQL；Docker 镜像里有 policy-rc.d 禁止自动启动，
+# 不管哪种情况，这里都明确启动一次
+- name: 启动 MySQL
   ansible.builtin.systemd_service:
-    name: mysqld
+    name: "{{ mysql_service }}"
     state: started
     enabled: true
 
-- name: 设置 root 密码
-  ansible.mysql.mysql_user:
-    name: root
-    host: localhost
-    password: "{{ mysql_root_password }}"
-    login_user: root
-    login_password: "{{ mysql_root_password }}"
-    login_unix_socket: "{{ mysql_socket }}"
-    # 第一次 root 没有密码，先试无密码登录
-    check_implicit_admin: true
-    # 不写 binlog：每台机器的 root 密码各自设置，不能复制到从库，也避免从库产生多余的 GTID
-    sql_log_bin: false
-    state: present
-  no_log: true
-
-- name: root 的客户端配置，以后本机执行 mysql 不用输密码
+- name: root 的客户端配置（ansible.mysql 模块默认读 ~/.my.cnf，auth_socket 不需要密码）
   ansible.builtin.template:
     src: root.my.cnf.j2
     dest: /root/.my.cnf
     owner: root
     group: root
     mode: "0600"
-  diff: false
 
 - name: 配置变了现在就重启，后面的任务要用新配置
   ansible.builtin.meta: flush_handlers
+
+- name: 确认新配置已生效（GTID 已开启）
+  ansible.mysql.mysql_query:
+    query: SELECT @@gtid_mode AS gtid_mode, @@server_id AS server_id
+    login_unix_socket: "{{ mysql_socket }}"
+  register: mysql_vars
+  changed_when: false
+  # 只读查询，--check 预演时也真正执行，否则下一行拿不到结果
+  check_mode: false
+  failed_when: mysql_vars.query_result[0][0]['gtid_mode'] != 'ON'

@@ -18,7 +18,8 @@ if ! q 'SELECT 1' >/dev/null; then
 fi
 
 read -r host ro sro gm <<< "$(q 'SELECT @@hostname, @@read_only, @@super_read_only, @@gtid_mode')"
-gtid="$(q 'SELECT @@gtid_executed' | tr -d '\n')"
+# -B 模式会把 GTID 集合里的换行输出成字面量 \n，先在 SQL 里去掉换行
+gtid="$(q "SELECT REPLACE(@@gtid_executed, CHAR(10), '')")"
 echo "主机：${host}  read_only=${ro}  super_read_only=${sro}  gtid_mode=${gm}"
 echo "gtid_executed：${gtid}"
 

@@ -15,7 +15,7 @@ COMPOSE_DIR="${COMPOSE_DIR:-$(cd "$(dirname "$0")/.." && pwd)}"
 ts="$(date +%Y%m%d-%H%M%S)"
 out="$BACKUP_DIR/eth-node-$ts.tar.zst"
 
-command -v zstd >/dev/null || { echo "缺少 zstd：sudo dnf install -y zstd" >&2; exit 1; }
+command -v zstd >/dev/null || { echo "缺少 zstd：sudo apt install -y zstd" >&2; exit 1; }
 sudo mkdir -p "$BACKUP_DIR"
 
 need_gb="$(sudo du -s --block-size=1G "$DATA_DIR/geth" "$DATA_DIR/lighthouse" | awk '{s+=$1} END {print s}')"

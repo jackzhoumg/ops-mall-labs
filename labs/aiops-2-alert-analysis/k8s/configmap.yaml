@@ -15,8 +15,8 @@ data:
   LOKI_URL: "http://loki-gateway.logging.svc"
   # 日志流选择器，${namespace} 会被替换成告警里的 namespace。标签名要和 Lab 10 采集时打的标签一致
   LOKI_SELECTOR: '{namespace="${namespace}", container="mall-api"}'
-  # Loki 开了多租户（auth_enabled: true）时填租户 ID
-  LOKI_TENANT: ""
+  # Loki 开了多租户（auth_enabled: true）时填租户 ID。Lab 10 开了多租户，mall-api 的日志在租户 mall
+  LOKI_TENANT: "mall"
   K8S_ENABLED: "true"
   K8S_LABEL_SELECTOR: "app.kubernetes.io/name=mall-api"
   LOOKBACK_MINUTES: "15"

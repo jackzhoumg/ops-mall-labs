@@ -8,7 +8,7 @@
 
 driver:
   # modern_ebpf：探针编译进 Falco 本身，不用按内核版本下载 / 编译驱动，国内网络环境下最省事。
-  # 要求内核 >= 5.8 且开启 BTF。Rocky Linux 9（内核 5.14）满足。
+  # 要求内核 >= 5.8 且开启 BTF。Ubuntu 24.04（内核 6.8，自带 BTF）满足。
   kind: modern_ebpf
 
 # 告警输出成 JSON 单行，方便 Lab 10 的 Fluent Bit 收集到 Loki / Elasticsearch

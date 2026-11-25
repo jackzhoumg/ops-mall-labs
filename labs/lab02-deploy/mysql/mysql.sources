@@ -1,0 +1,14 @@
+# /etc/apt/sources.list.d/mysql.sources（lab-db1、lab-db2）
+# MySQL 8.4 LTS 官方 APT 源，DEB822 格式。和 Lab 03 roles/mysql/tasks/install.yml 生成的文件一致
+#
+# 公钥先下载到 /etc/apt/keyrings/mysql.asc（文本格式的公钥，文件名以 .asc 结尾 apt 就能直接用）：
+#   sudo install -d -m 755 /etc/apt/keyrings
+#   sudo curl -fsSL https://repo.mysql.com/RPM-GPG-KEY-mysql-2025 -o /etc/apt/keyrings/mysql.asc
+# 注意：RPM-GPG-KEY-mysql-2023 已于 2025 年 10 月过期，apt update 会报 EXPKEYSIG，必须用 2025 这把
+#
+# 国内网络慢时把 URIs 换成清华镜像：https://mirrors.tuna.tsinghua.edu.cn/mysql/apt/ubuntu
+Types: deb
+URIs: http://repo.mysql.com/apt/ubuntu
+Suites: noble
+Components: mysql-8.4-lts
+Signed-By: /etc/apt/keyrings/mysql.asc

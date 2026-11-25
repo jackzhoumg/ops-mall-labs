@@ -1,8 +1,8 @@
 # kube-bench：在控制平面节点上跑 CIS Kubernetes Benchmark（master、etcd、controlplane、policies 四部分）。
 # 改编自 kube-bench 官方 job-master.yaml（写作时 kube-bench v0.16.0）。
 #
-# 为什么写死 --benchmark cis-2.0：kube-bench v0.16.0 的版本映射表最高只到 Kubernetes 1.35，
-# 集群是 1.36 时自动识别会失败。等官方映射表加上 1.36 后，可以去掉这个参数。
+# 为什么写死 --benchmark cis-2.0：kube-bench v0.16.0（写作时最新）的版本映射表最高只到 Kubernetes 1.35，
+# 课程集群是 1.37，自动识别会失败。等官方映射表加上 1.37 后，可以去掉这个参数。
 #
 # 用法（k8s-master 上执行）：
 #   kubectl apply -f job-master.yaml

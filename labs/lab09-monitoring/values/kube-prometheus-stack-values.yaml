@@ -1,11 +1,11 @@
 # Lab 09：kube-prometheus-stack 实验环境 values
-# 写作时版本：chart 93.9.0（Prometheus Operator v0.95.2、Prometheus v3.16.0、
-#             Alertmanager v0.35.0、Grafana 13.3.1）。以官方最新文档为准。
+# 写作时版本：chart 93.10.1（Prometheus Operator v0.95.2、Prometheus v3.16.0、
+#             Alertmanager v0.35.1、Grafana 13.3.2）。以官方最新文档为准。
 #
 # 用法（在 k8s-master 上执行）：
 #   helm upgrade --install kube-prometheus-stack \
 #     oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
-#     --version 93.9.0 -n monitoring --create-namespace \
+#     --version 93.10.1 -n monitoring --create-namespace \
 #     -f values/kube-prometheus-stack-values.yaml \
 #     -f values/alertmanager-values.yaml
 #

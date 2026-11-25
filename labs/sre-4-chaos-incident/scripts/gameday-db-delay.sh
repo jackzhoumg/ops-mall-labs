@@ -12,7 +12,8 @@
 #   bash gameday-db-delay.sh stop             # 立即撤销
 #
 # 只影响源端口是 3306 / 6379 的出方向数据包，SSH 等其他流量不受影响。
-# 依赖内核模块 sch_netem，Rocky Linux 9 要先装：dnf install -y kernel-modules-extra && modprobe sch_netem
+# 依赖内核模块 sch_netem 和 sch_prio。Ubuntu 24.04 的 generic 内核自带（在默认安装的 linux-modules 包里），
+# 脚本会自动 modprobe；云厂商的精简内核没有时：apt install -y linux-modules-extra-$(uname -r)
 set -euo pipefail
 
 DELAY="${DELAY:-1500ms}"
@@ -25,10 +26,10 @@ IFACE="${IFACE:-$(ip -o -4 addr show | awk '/192\.168\.56\./ { print $2; exit }'
 [[ -n "$IFACE" ]] || { echo "找不到 192.168.56.x 网卡，用 IFACE=网卡名 指定" >&2; exit 1; }
 
 start() {
-  modprobe sch_netem 2>/dev/null || {
-    echo "加载 sch_netem 失败。Rocky Linux 9：dnf install -y kernel-modules-extra 后重启或重新 modprobe" >&2
+  if ! { modprobe sch_netem && modprobe sch_prio; } 2>/dev/null; then
+    echo "加载 sch_netem / sch_prio 失败。先确认 modinfo sch_netem 能找到模块；精简内核装 linux-modules-extra-\$(uname -r)" >&2
     exit 1
-  }
+  fi
   if tc qdisc show dev "$IFACE" | grep -q "netem"; then
     echo "网卡 $IFACE 上已经有 netem 规则，先 stop" >&2; exit 1
   fi

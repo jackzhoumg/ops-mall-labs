@@ -7,11 +7,16 @@
   vars:
     motd_text: "ops-mall 实验机器，由 Ansible 管理。手工改动会被覆盖。"
   tasks:
+    # Ubuntu 24.04 默认用 systemd-timesyncd 同步时间，装 chrony 会自动替换掉它
     - name: 安装 chrony
-      ansible.builtin.dnf:
+      ansible.builtin.apt:
         name: chrony
         state: present
+        update_cache: true
+        cache_valid_time: 3600
 
+    # Ubuntu 的 /etc/motd 默认不存在，登录提示由 /etc/update-motd.d/ 下的脚本动态生成，
+    # 这里写的 /etc/motd 会显示在那些内容后面
     - name: 写登录提示
       ansible.builtin.copy:
         dest: /etc/motd
@@ -20,21 +25,24 @@
           主机：{{ inventory_hostname }}（{{ ansible_host }}）
         mode: "0644"
 
+    # Ubuntu 的 /etc/chrony/chrony.conf 里有 sourcedir /etc/chrony/sources.d，
+    # 往这个目录放一个 .sources 文件就能加时间源，不用改主配置文件
     - name: 配置 chrony 使用国内 NTP
-      ansible.builtin.lineinfile:
-        path: /etc/chrony.conf
-        regexp: '^pool '
-        line: "pool ntp.aliyun.com iburst"
-      notify: restart chronyd
+      ansible.builtin.copy:
+        dest: /etc/chrony/sources.d/aliyun.sources
+        content: |
+          pool ntp.aliyun.com iburst
+        mode: "0644"
+      notify: restart chrony
 
-    - name: chronyd 开机启动
+    - name: chrony 开机启动
       ansible.builtin.systemd_service:
-        name: chronyd
+        name: chrony
         state: started
         enabled: true
 
   handlers:
-    - name: restart chronyd
+    - name: restart chrony
       ansible.builtin.systemd_service:
-        name: chronyd
+        name: chrony
         state: restarted

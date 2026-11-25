@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # 给 mall-api 造持续的背景流量，可以按比例混入 500 错误和慢请求，用来“烧”错误预算、触发 SLO 告警。
-# 只用 curl，Rocky / Ubuntu / macOS 自带的 bash 都能跑。
+# 只用 curl，Ubuntu / macOS 自带的 bash 都能跑。
 #
 # 用法（学员电脑或 k8s-master，能访问 mall.lab.local 即可）：
 #   bash scripts/gen-traffic.sh                              # 正常流量，跑 30 分钟

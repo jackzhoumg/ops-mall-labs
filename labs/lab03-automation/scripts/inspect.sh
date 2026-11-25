@@ -19,7 +19,7 @@ DISK_WARN="${DISK_WARN:-85}"               # 磁盘使用率 %
 INODE_WARN="${INODE_WARN:-85}"             # inode 使用率 %
 LOAD_WARN_RATIO="${LOAD_WARN_RATIO:-1.5}"  # 1 分钟负载 / CPU 核数
 CERT_WARN_DAYS="${CERT_WARN_DAYS:-30}"     # 证书剩余天数
-SERVICES="${SERVICES:-sshd chronyd}"       # 要检查的 systemd 服务，空格分隔
+SERVICES="${SERVICES:-ssh chrony cron}"   # 要检查的 systemd 服务，空格分隔（Ubuntu 上是 ssh 不是 sshd）
 CERT_FILES="${CERT_FILES:-}"               # 本地证书文件，空格分隔
 CERT_HOSTS="${CERT_HOSTS:-}"               # 远程地址 host:port，空格分隔
 

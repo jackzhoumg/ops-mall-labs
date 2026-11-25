@@ -1,0 +1,11 @@
+# /etc/apt/sources.list.d/nginx.sources（lab-web1、lab-web2）
+# nginx.org 官方 stable 源，DEB822 格式。和 Lab 03 roles/nginx/tasks/main.yml 生成的文件一致
+#
+# 公钥：
+#   sudo install -d -m 755 /etc/apt/keyrings
+#   sudo curl -fsSL https://nginx.org/keys/nginx_signing.key -o /etc/apt/keyrings/nginx.asc
+Types: deb
+URIs: https://nginx.org/packages/ubuntu
+Suites: noble
+Components: nginx
+Signed-By: /etc/apt/keyrings/nginx.asc

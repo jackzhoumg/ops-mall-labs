@@ -36,7 +36,7 @@ spec:
             namespace: monitoring
           annotations:
             summary: "alert-analyzer 没有健康实例"
-            description: "告警智能分析服务不可用，告警仍会通过 alert-bridge 正常发送，只是没有 AI 分析。"
+            description: "告警智能分析服务不可用，告警仍会通过 PrometheusAlert 正常发到群里，只是没有 AI 分析。"
         # 一小时里一半以上降级：大模型服务不稳定、密钥过期或额度用完
         - alert: AlertAnalyzerFallbackHigh
           expr: |

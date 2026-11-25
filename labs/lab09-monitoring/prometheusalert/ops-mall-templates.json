@@ -1,0 +1,18 @@
+[
+  {
+    "Id": 0,
+    "Tpltype": "wx",
+    "Tpluse": "Prometheus",
+    "Tplname": "ops-mall-wx",
+    "Tpl": "{{ $var := .externalURL }}{{ range $k, $v := .alerts }}{{ if eq $v.status \"resolved\" }}### <font color=\"info\">【已恢复】</font>{{ $v.labels.alertname }}\n{{ else }}### <font color=\"warning\">【告警 {{ if eq $v.labels.severity \"critical\" }}P1 紧急{{ else if eq $v.labels.severity \"warning\" }}P2 警告{{ else }}P3 提示{{ end }}】</font>{{ $v.labels.alertname }}\n{{ end }}> 摘要：{{ $v.annotations.summary }}\n{{ with $v.annotations.description }}> 说明：{{ . }}\n{{ end }}{{ with $v.labels.namespace }}> 命名空间：{{ . }}\n{{ end }}{{ with $v.labels.hostname }}> 主机：{{ . }}\n{{ end }}{{ with $v.labels.source }}> 来源：{{ . }}\n{{ end }}> 开始时间：{{ GetCSTtime $v.startsAt }}\n{{ if eq $v.status \"resolved\" }}> 恢复时间：{{ GetCSTtime $v.endsAt }}\n{{ end }}\n{{ end }}[打开 Alertmanager]({{ $var }})",
+    "WebhookContentType": ""
+  },
+  {
+    "Id": 1,
+    "Tpltype": "wx",
+    "Tpluse": "Custom",
+    "Tplname": "holmes-wx",
+    "Tpl": "### 【AI 分析】{{ .check_name }}\n{{ with .namespace }}> 命名空间：{{ . }}\n{{ end }}\n{{ .message }}\n\n> HolmesGPT 自动分析，仅供参考，以实际排查为准。",
+    "WebhookContentType": ""
+  }
+]

@@ -1,0 +1,7 @@
+# /etc/apt/preferences.d/99nginx
+# nginx.org 官方文档要求的 pin：Ubuntu 源和 nginx.org 源都有 nginx 包，固定用 nginx.org 的，
+# 防止 apt upgrade 把它换成 Ubuntu 的包（两边的配置目录布局不一样）
+Package: *
+Pin: origin nginx.org
+Pin: release o=nginx
+Pin-Priority: 900

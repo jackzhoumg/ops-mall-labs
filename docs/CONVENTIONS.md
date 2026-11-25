@@ -65,7 +65,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=v
 | lab-db1 | 192.168.56.13 | 2C2G | Lab 02-03：MySQL 主库 + Redis |
 | lab-db2 | 192.168.56.14 | 2C2G | Lab 02：MySQL 从库 |
 | — | 192.168.56.10 | — | Keepalived VIP（Lab 02） |
-| lab-dev | 192.168.56.15 | 2C4G | Lab 04：Docker、Harbor |
+| lab-dev | 192.168.56.15 | 2C4G（做 AIOps-1 的 Dify 时调到 4C8G，或改用按量云服务器） | Lab 04：Docker、Harbor；AIOps-1：Dify |
 | lab-ci | 192.168.56.16 | 4C8G | Lab 07：GitLab、Jenkins（内存不够可用云服务器按量） |
 | k8s-master | 192.168.56.21 | 2C4G | Lab 05 起：控制平面 |
 | k8s-node1 | 192.168.56.22 | 2C4G | 工作节点 |
@@ -73,6 +73,9 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=v
 | lab-eth1 / lab-eth2 | 192.168.56.31 / .32 | 4C16G + 大容量 SSD | Node-1 / Node-2（建议用云服务器） |
 
 - 操作系统：**Ubuntu Server 24.04 LTS**（全课程只维护这一套，不再写 Rocky / CentOS 的命令）。软件包用 `apt`，防火墙用 `ufw`（底层 nftables），网络用 netplan（`/etc/netplan/*.yaml`），强制访问控制是 AppArmor。国内软件源用阿里云或清华镜像（24.04 的源配置文件是 `/etc/apt/sources.list.d/ubuntu.sources`，DEB822 格式）。
+- Ubuntu 上容易踩的点（各实验统一按这些写）：SSH 服务名是 `ssh`；时间同步默认 systemd-timesyncd，需要 chrony 时装 `chrony` 包；ufw 开启后每个服务都要显式放行端口，Docker 用 `-p` 发布的端口绕过 ufw；nginx 等包装完会自动启动；`dig` 默认问 systemd-resolved（127.0.0.53），它会读 `/etc/hosts`。
+- 软件版本选择：MySQL 用官方 APT 源的 8.4 LTS（包 `mysql-community-server`，公钥 RPM-GPG-KEY-mysql-2025）；Nginx 用 nginx.org stable 源；Redis 用官方源 packages.redis.io 的 8.x（服务 `redis-server`）；Docker 用官方 docker-ce 源。不用 Ubuntu 仓库里偏旧的版本。
+- `/etc/hosts` 课程主机块统一用标记 `# BEGIN ops-mall lab hosts (managed by ansible)` / `# END ops-mall lab hosts (managed by ansible)`，init-vm.sh 和 Lab 03 的 Ansible 共用，不会重复。
 - 讲到 RHEL 体系时只用一两句对照（如“RHEL 系用 dnf / firewalld / SELinux”），方便学员面试时能说清区别，不展开操作。
 - 实验用户：`ops`，有 sudo 权限。命令提示符写法：`ops@lab-web1:~$`（普通用户）和 `root@lab-web1:~#`（root）。
 - 不用的虚拟机关掉。同时开机的机器一般不超过 4 台。

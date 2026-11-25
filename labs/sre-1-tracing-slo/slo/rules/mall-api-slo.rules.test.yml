@@ -74,9 +74,11 @@ tests:
               notify: page
               service: mall-api
               slo: availability
+            # description 里的数字是告警表达式的值（1h 错误比例）。rate() 在窗口边缘会做外推，
+            # 不同 Prometheus 版本的外推细节有差异，这里是 promtool v3.16.0 的实测值；升级后对不上就按新输出改
             exp_annotations:
               summary: "mall-api 的 availability 错误预算正在快速消耗"
-              description: "按当前速度，几小时到一两天内就会烧光 30 天的错误预算。当前错误比例 5.097%。先止血：回滚最近的发布或切流量。"
+              description: "按当前速度，几小时到一两天内就会烧光 30 天的错误预算。当前错误比例 4.969%。先止血：回滚最近的发布或切流量。"
               runbook_url: "https://github.com/jackzhoumg/ops-mall-labs/blob/main/labs/sre-1-tracing-slo/slo/error-budget-policy.md"
 
   # 从没出现过 5xx（没有 status="5xx" 的时间序列）时，错误比例应该是 0 而不是“没数据”

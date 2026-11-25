@@ -1,10 +1,7 @@
-# /etc/my.cnf（lab-db2，从库）
-# 和主库只差三处：server-id=2、relay-log、read_only。和 Lab 03 roles/mysql/templates/my.cnf.j2 渲染结果一致
+# /etc/mysql/mysql.conf.d/mall.cnf（lab-db2，从库）
+# 和主库只差三处：server-id=2、relay-log、read_only。和 Lab 03 roles/mysql/templates/mall.cnf.j2 渲染结果一致
+# 改完：sudo systemctl restart mysql
 [mysqld]
-datadir=/var/lib/mysql
-socket=/var/lib/mysql/mysql.sock
-log-error=/var/log/mysqld.log
-pid-file=/var/run/mysqld/mysqld.pid
 bind-address=0.0.0.0
 port=3306
 skip-name-resolve
@@ -12,7 +9,6 @@ max_connections=500
 character-set-server=utf8mb4
 collation-server=utf8mb4_0900_ai_ci
 innodb_buffer_pool_size=512M
-
 # ---- 复制 ----
 server-id=2
 # 从库也开 binlog：主库挂了从库要能顶上当主库，它的 binlog 才能给别人复制
@@ -23,8 +19,7 @@ enforce_gtid_consistency=ON
 relay-log=relay-bin
 # 从库只读，防止有人误写；root 等有 SUPER 权限的账号不受 read_only 限制
 read_only=ON
-
 # ---- 慢查询 ----
 slow_query_log=ON
-slow_query_log_file=/var/lib/mysql/slow.log
+slow_query_log_file=/var/log/mysql/mysql-slow.log
 long_query_time=1

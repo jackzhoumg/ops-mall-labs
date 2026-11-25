@@ -1,0 +1,92 @@
+# AIOps-2：HolmesGPT 的 ServiceAccount 和只读权限（替代 Chart 默认的集群级 ClusterRole）
+# 只能读 mall（业务）和 monitoring（监控组件）两个命名空间，不能读 Secret，不能改任何东西。
+# 写作时参照 HolmesGPT 0.47.0 文档 "Limiting Holmes to a Namespace" 的手工配置方式。
+# 要调查 mall-staging / mall-prod，把 Role 和 RoleBinding 复制一份改 namespace，并加进 values.yaml 的 SCOPED_NAMESPACES。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: holmes
+  # 必须和 Holmes 的 Helm release 在同一个命名空间
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: holmes
+    app.kubernetes.io/part-of: ops-mall
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: holmes-read
+  namespace: mall
+  labels:
+    app.kubernetes.io/name: holmes
+    app.kubernetes.io/part-of: ops-mall
+rules:
+  # configmaps 里是非敏感配置（mall-api-config），排查"是不是配置改错了"要用；secrets 一律不给
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status", "events", "services", "endpoints", "configmaps", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["autoscaling"]
+    resources: ["horizontalpodautoscalers"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["discovery.k8s.io"]
+    resources: ["endpointslices"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: holmes-read
+  namespace: mall
+  labels:
+    app.kubernetes.io/name: holmes
+    app.kubernetes.io/part-of: ops-mall
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: holmes-read
+subjects:
+  - kind: ServiceAccount
+    name: holmes
+    namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: holmes-read
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: holmes
+    app.kubernetes.io/part-of: ops-mall
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "pods/status", "events", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets", "daemonsets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["monitoring.coreos.com"]
+    resources: ["prometheusrules", "servicemonitors", "podmonitors", "scrapeconfigs"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: holmes-read
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: holmes
+    app.kubernetes.io/part-of: ops-mall
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: holmes-read
+subjects:
+  - kind: ServiceAccount
+    name: holmes
+    namespace: monitoring

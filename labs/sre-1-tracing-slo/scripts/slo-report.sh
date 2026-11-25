@@ -13,7 +13,7 @@ PROM_URL="${PROM_URL:-http://prometheus.lab.local}"
 SERVICE="${SERVICE:-mall-api}"
 PERIOD_DAYS="${PERIOD_DAYS:-30}"
 
-command -v jq >/dev/null || { echo "需要 jq：sudo dnf install -y jq" >&2; exit 1; }
+command -v jq >/dev/null || { echo "需要 jq：sudo apt install -y jq" >&2; exit 1; }
 
 # query <PromQL> <slo>：返回一个数字，没数据返回 NaN
 query() {

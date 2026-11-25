@@ -3,7 +3,7 @@
 #
 # 用法：
 #   ./nginx_log_stats.sh                                   # 默认分析 /var/log/nginx/access.log
-#   ./nginx_log_stats.sh -n 20 -s 0.5 /var/log/nginx/access.log /var/log/nginx/access.log-*.gz
+#   ./nginx_log_stats.sh -n 20 -s 0.5 /var/log/nginx/access.log /var/log/nginx/access.log.*.gz
 #
 # 支持两种日志格式（按双引号切分字段，URL 或 UA 里有空格也不会错位）：
 #   combined：Nginx 默认格式，没有耗时字段，慢请求统计会跳过

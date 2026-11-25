@@ -6,6 +6,8 @@
 # 依赖：curl、jq
 set -euo pipefail
 # shellcheck source=common.sh
+# common.sh 和本脚本在同一目录，单独做 shellcheck
+# shellcheck disable=SC1091
 source "$(dirname "$0")/common.sh"
 
 pubkeys=("$@")

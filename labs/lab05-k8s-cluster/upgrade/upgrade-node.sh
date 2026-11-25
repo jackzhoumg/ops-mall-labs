@@ -1,10 +1,10 @@
 #!/usr/bin/env bash
-# 升级一台工作节点：v1.35.x -> v1.36.x（控制平面必须已经升级完）
+# 升级一台工作节点：v1.36.x -> v1.37.x（控制平面必须已经升级完）
 # 严格按 Kubernetes 官方 Upgrading Linux nodes 的顺序：
 #   换源 -> 升级 kubeadm、kubectl -> kubeadm upgrade node -> （master 上）drain -> 升级 kubelet -> 重启 kubelet -> （master 上）uncordon
 #
 # 用法（在要升级的工作节点上 root 执行，一次只升一台）：
-#   sudo ./upgrade-node.sh 1.36.6
+#   sudo ./upgrade-node.sh 1.37.2
 # drain / uncordon 要在 k8s-master 上执行，脚本到那一步会停下来提示你
 # 对应教程：Lab 05 K8s 集群搭建与日常维护
 set -Eeuo pipefail
@@ -28,15 +28,12 @@ wait_master() {
 
 pkg_install() {
   local p args=()
-  if command -v dnf >/dev/null; then
-    for p in "$@"; do args+=("${p}-${TARGET}"); done
-    dnf install -y "${args[@]}" --disableexcludes=kubernetes
-  else
-    for p in "$@"; do args+=("${p}=${TARGET}-*"); done
-    apt-mark unhold "$@"
-    apt-get install -y "${args[@]}"
-    apt-mark hold "$@"
-  fi
+  for p in "$@"; do args+=("${p}=${TARGET}-*"); done
+  # 被 hold 的包要先解锁才能升级，升级完马上重新锁定
+  apt-mark unhold "$@"
+  # --force-confold：保留 /etc/default/kubelet 里的 --node-ip，不让 dpkg 停下来问
+  DEBIAN_FRONTEND=noninteractive apt-get install -y -o Dpkg::Options::=--force-confold "${args[@]}"
+  apt-mark hold "$@"
 }
 
 main() {
@@ -45,7 +42,7 @@ main() {
     exit 2
   fi
   if [[ ! "$TARGET" =~ ^1\.[0-9]+\.[0-9]+$ ]]; then
-    echo "用法: $0 1.36.6" >&2
+    echo "用法: $0 1.37.2" >&2
     exit 2
   fi
   local minor="v${TARGET%.*}"

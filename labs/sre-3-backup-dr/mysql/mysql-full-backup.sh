@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# MySQL 逻辑全备：mysqldump 一致性快照 + 压缩 + 校验 + 上传 MinIO + 清理过期备份。
+# MySQL 逻辑全备：mysqldump 一致性快照 + 压缩 + 校验 + 上传对象存储 + 清理过期备份。
 # 由 systemd 定时器 mall-mysql-full-backup.timer 每天 02:00 调用，也可以手工执行。
 #
 # 用法（lab-db1，root）：

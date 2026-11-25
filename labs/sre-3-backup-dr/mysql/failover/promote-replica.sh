@@ -51,7 +51,7 @@ q 'SET PERSIST super_read_only = OFF'
 q 'SET PERSIST read_only = OFF'
 log "已关闭只读：read_only=$(q 'SELECT @@read_only') super_read_only=$(q 'SELECT @@super_read_only')"
 
-log "当前 gtid_executed：$(q 'SELECT @@gtid_executed' | tr -d '\n')"
+log "当前 gtid_executed：$(q "SELECT REPLACE(@@gtid_executed, CHAR(10), '')")"
 cat <<'EOF'
 
 下一步：

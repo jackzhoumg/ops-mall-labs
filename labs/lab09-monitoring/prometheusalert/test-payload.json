@@ -1,0 +1,39 @@
+{
+  "version": "4",
+  "groupKey": "{}/{severity=\"critical\"}:{alertname=\"MallApiHighErrorRate\", namespace=\"mall\", severity=\"critical\"}",
+  "truncatedAlerts": 0,
+  "status": "firing",
+  "receiver": "oncall-p1",
+  "groupLabels": {
+    "alertname": "MallApiHighErrorRate",
+    "namespace": "mall",
+    "severity": "critical"
+  },
+  "commonLabels": {
+    "alertname": "MallApiHighErrorRate",
+    "job": "mall-api",
+    "namespace": "mall",
+    "severity": "critical"
+  },
+  "commonAnnotations": {},
+  "externalURL": "http://127.0.0.1:9093",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "MallApiHighErrorRate",
+        "job": "mall-api",
+        "namespace": "mall",
+        "severity": "critical"
+      },
+      "annotations": {
+        "summary": "【课程测试】mall mall-api 5xx 错误率 32.5%",
+        "description": "这是一条课程测试消息，用来确认 PrometheusAlert、模板和群机器人都通，不需要处理。"
+      },
+      "startsAt": "2026-11-24T08:01:30.123456789Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus.lab.local/graph?g0.expr=...",
+      "fingerprint": "3b9e0a1c2d4f5e6a"
+    }
+  ]
+}

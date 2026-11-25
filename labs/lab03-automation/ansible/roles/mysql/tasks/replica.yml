@@ -4,6 +4,8 @@
     login_unix_socket: "{{ mysql_socket }}"
   register: replica_status
   changed_when: false
+  # 只读查询，--check 预演时也要真执行，否则下面的 when 拿不到结果
+  check_mode: false
 
 # 只在还没配置过复制时执行，重复跑 playbook 不会重置复制（幂等）
 - name: 首次配置复制
@@ -36,6 +38,7 @@
     login_unix_socket: "{{ mysql_socket }}"
   register: replica_check
   changed_when: false
+  check_mode: false
   retries: 10
   delay: 3
   until:

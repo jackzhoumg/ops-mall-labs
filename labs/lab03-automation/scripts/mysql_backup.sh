@@ -9,7 +9,7 @@
 #   [client]
 #   user=backup
 #   password=你的备份账号密码
-#   socket=/var/lib/mysql/mysql.sock
+#   socket=/var/run/mysqld/mysqld.sock
 #
 # 定时任务（/etc/cron.d/mysql-backup）：
 #   30 2 * * * root /usr/local/bin/mysql_backup.sh >/dev/null 2>&1
@@ -18,6 +18,8 @@
 # 对应教程：Lab 03 Shell / Python 与 Ansible 自动化
 
 set -Eeuo pipefail
+# 备份文件里是整库数据，只给 root 读（默认 umask 022 生成的文件所有人可读）
+umask 077
 
 BACKUP_DIR="${BACKUP_DIR:-/data/backup/mysql}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"

@@ -1,7 +1,31 @@
-- name: 安装 Redis
-  ansible.builtin.dnf:
+# 和 mysql、nginx 角色一样用 DEB822 格式加源，公钥只给这个源用
+- name: 添加 Redis 官方 APT 源
+  ansible.builtin.deb822_repository:
     name: redis
+    types: deb
+    uris: "{{ redis_apt_uri }}"
+    suites: "{{ ansible_facts['distribution_release'] }}"
+    components: main
+    signed_by: "{{ redis_apt_key_url }}"
     state: present
+  register: redis_repo
+- name: 安装 Redis
+  ansible.builtin.apt:
+    name:
+      - redis-server
+      - redis-tools
+    state: present
+    update_cache: "{{ redis_repo is changed }}"
+- name: 读取 Redis 版本
+  ansible.builtin.command:
+    cmd: redis-server --version
+  register: redis_version_out
+  changed_when: false
+- name: 确认装的是官方源的 {{ redis_major_version }}.x
+  ansible.builtin.assert:
+    that: redis_version_out.stdout is search('v=' ~ redis_major_version ~ '\.')
+    fail_msg: "装上的是 {{ redis_version_out.stdout }}，不是 {{ redis_major_version }}.x。检查 /etc/apt/sources.list.d/redis.sources 和 apt policy redis-server"
+    quiet: true
 
 - name: 修改 Redis 配置
   ansible.builtin.lineinfile:
@@ -10,7 +34,7 @@
     regexp: '^#?\s*{{ item.key }}\s'
     line: "{{ item.key }} {{ item.value }}"
     owner: redis
-    group: root
+    group: redis
     mode: "0640"
   loop: "{{ redis_settings }}"
   loop_control:
@@ -24,17 +48,19 @@
     value: "1"
     sysctl_file: /etc/sysctl.d/90-redis.conf
     state: present
+  when: redis_set_overcommit_memory | bool
 
 - name: 防火墙只对实验网段开放 6379
-  ansible.posix.firewalld:
-    rich_rule: 'rule family="ipv4" source address="{{ lab_network }}" port port="{{ redis_port }}" protocol="tcp" accept'
-    permanent: true
-    immediate: true
-    state: enabled
+  community.general.ufw:
+    rule: allow
+    src: "{{ lab_network }}"
+    port: "{{ redis_port | string }}"
+    proto: tcp
+    comment: redis
 
 - name: 启动 Redis
   ansible.builtin.systemd_service:
-    name: redis
+    name: "{{ redis_service }}"
     state: started
     enabled: true
 

@@ -4,7 +4,7 @@
 --       主库已经跑了很久、binlog 被清理过的情况，要先用 mysqldump / XtraBackup 做一份全量再接复制，见教程 7. 常见的坑。
 -- 对应教程：Lab 02 商城上线 5.4 节
 
--- 清掉从库自己产生的 GTID（改 root 密码等操作会在从库上生成本机 UUID 的事务），
+-- 清掉从库自己产生的 GTID（装包初始化、手工执行过的写操作会在从库上生成本机 UUID 的事务），
 -- 否则从库带着“主库没有的事务”（errant transaction），以后主从切换会出问题
 -- MySQL 8.4 已删除 RESET MASTER，用新语法
 RESET BINARY LOGS AND GTIDS;

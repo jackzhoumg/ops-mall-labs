@@ -1,6 +1,6 @@
 # Lab 06 应用上 K8s 与流量入口
 
-对应教程：《DevOps 运维实战》Lab 06 应用上 K8s 与流量入口。实验机器：k8s-master（192.168.56.21）、k8s-node1/2（.22/.23），数据库仍在 lab-db1（192.168.56.13）。所有 kubectl 命令在 k8s-master 上执行。
+对应教程：《DevOps 运维实战》Lab 06 应用上 K8s 与流量入口。实验机器：k8s-master（192.168.56.21）、k8s-node1/2（.22/.23），数据库仍在 lab-db1（192.168.56.13），都是 Ubuntu Server 24.04 LTS。集群是 Lab 05 升级后的 Kubernetes v1.37。所有 kubectl 命令在 k8s-master 上执行。
 
 资源命名遵守 `docs/CONVENTIONS.md` 的“K8s 资源统一命名”，后续实验依赖这些名字，不要改。
 
@@ -26,7 +26,16 @@
 | `ingress-legacy/mall-ingress.yaml` | 等价的 Ingress NGINX 写法，只做对照 |
 | `faults/01..07-*.yaml` | Pod 起不来排查练习：Pending ×2、ImagePullBackOff ×2、CrashLoopBackOff、not Ready、OOMKilled |
 
-## 顺序（写作时版本，以官方文档为准）
+## 写作时版本（以官方文档为准）
+| 组件 | 版本 | 和 K8s 1.37 的兼容性 |
+|---|---|---|
+| MetalLB | v0.16.2（native 清单） | 只要求 K8s 1.13+ |
+| Envoy Gateway | v1.10.0 | 兼容矩阵：K8s v1.34-v1.37，内置 Gateway API v1.6.1 |
+| Gateway API | v1.6.1 标准通道（跟 Envoy Gateway 走，上游最新 v1.7.0 先不装） | 同上 |
+| cert-manager | v1.21.3 | 官方支持表写到 K8s 1.36，还没列 1.37；v1.22 写作时只有 alpha，正式发布后换成它 |
+| Helm | v4.3.2 | — |
+
+## 顺序
 
 ```bash
 # 0. 拉取凭据（Harbor 机器人账号，只给“拉取制品”权限）
@@ -73,3 +82,9 @@ kubectl apply -f labs/lab06-k8s-app/gateway/20-envoyproxy.yaml \
 ```bash
 kubectl delete -f labs/lab06-k8s-app/faults/ --ignore-not-found
 ```
+
+## 验证记录
+验证时间 2026-11-25。
+- 已验证：全部清单用 yamlcheck 检查通过；`KUBECONFIG=/dev/null kubectl kustomize labs/lab06-k8s-app/base`（kubectl v1.37.2 / Kustomize v5.8.1，纯本地）渲染出 13 个资源，名字和 `docs/CONVENTIONS.md` 的“K8s 资源统一命名”一致；Envoy Gateway v1.10.0 的 EnvoyProxy CRD 仍是 `gateway.envoyproxy.io/v1alpha1`，`envoyService.externalTrafficPolicy` / `annotations` 字段存在；各组件版本和兼容表按官方页面核对（见上面的版本表）。
+- 没有验证：所有需要集群的步骤（apply、MetalLB、Envoy Gateway、cert-manager、HTTPRoute、滚动更新、故障练习）。讲师实验机的 kubeconfig 指向生产集群，按约定不执行任何连集群的 kubectl，留给讲师在 kind 集群上统一验证。教程里的命令输出仍是示意。
+- 待确认：cert-manager v1.21.3 官方支持表只到 K8s 1.36，在 1.37 上需要实测；v1.22 正式发布后建议切换。

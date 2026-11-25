@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
-# 故障 4：mall-api 起不来。三种原因任选一种：
+# 故障 4：mall-api 起不来。四种原因任选一种：
 #   config  环境变量文件写错（监听端口写成了不存在的端口号）
 #   exec    二进制丢了执行权限（常见于手工 scp 覆盖、解压时权限丢失）
+#   dir     二进制有执行权限，但所在目录 mall 用户进不去（目录权限被改成 0700）
 #   port    8080 端口被别的进程占了
-# 用法：sudo bash make.sh config|exec|port
+# 用法：sudo bash make.sh config|exec|dir|port
 # 对应教程：Lab 01 第 5.5 节 故障 4
 set -euo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
@@ -23,6 +24,10 @@ case "${mode}" in
     chmod 0644 "${BIN}"
     restart_service || true
     ;;
+  dir)
+    chmod 0700 "$(dirname "${BIN}")"
+    restart_service || true
+    ;;
   port)
     systemctl stop "${SERVICE}"
     systemctl stop lab01-squatter.service 2>/dev/null || true
@@ -33,7 +38,7 @@ case "${mode}" in
     systemctl start "${SERVICE}" || true
     ;;
   *)
-    die "用法：sudo bash make.sh config|exec|port"
+    die "用法：sudo bash make.sh config|exec|dir|port"
     ;;
 esac
 

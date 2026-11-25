@@ -1,9 +1,19 @@
-# MySQL 8.4 LTS 官方社区版。国内用清华镜像，境外机器可改成 https://repo.mysql.com/yum/mysql-8.4-community/el/9/$basearch/
-mysql_repo_baseurl: "https://mirrors.tuna.tsinghua.edu.cn/mysql/yum/mysql-8.4-community-el9-{{ ansible_facts['architecture'] }}/"
-mysql_repo_gpgkey: https://repo.mysql.com/RPM-GPG-KEY-mysql-2023
+# MySQL 8.4 LTS 官方 APT 源（和 Lab 02 一致）。国内可以换成清华镜像：
+#   https://mirrors.tuna.tsinghua.edu.cn/mysql/apt/ubuntu
+mysql_apt_uri: http://repo.mysql.com/apt/ubuntu
+mysql_apt_component: mysql-8.4-lts
+# Oracle 的签名公钥。RPM-GPG-KEY-mysql-2023 已于 2025 年 10 月过期（apt update 报 EXPKEYSIG），
+# 写作时要用 RPM-GPG-KEY-mysql-2025（同一把密钥 B7B3B788A8D3785C，有效期延长到 2027 年 10 月）
+mysql_apt_key_url: https://repo.mysql.com/RPM-GPG-KEY-mysql-2025
 
-mysql_socket: /var/lib/mysql/mysql.sock
+# 官方 DEB 包的默认路径（/etc/mysql/mysql.conf.d/mysqld.cnf 里定义）
+mysql_service: mysql
+mysql_socket: /var/run/mysqld/mysqld.sock
 mysql_datadir: /var/lib/mysql
+mysql_log_dir: /var/log/mysql
+# 我们自己的配置放在 mysql.conf.d 下单独一个文件，不改包自带的 mysqld.cnf，升级时不会冲突
+mysql_conf_file: /etc/mysql/mysql.conf.d/mall.cnf
+
 mysql_bind_address: 0.0.0.0
 # 复制账号只允许实验网段连接
 mysql_repl_host: "192.168.56.%"
@@ -12,6 +22,9 @@ mysql_max_connections: 500
 mysql_innodb_buffer_pool_size: 512M
 mysql_binlog_expire_seconds: 604800
 mysql_slow_query_seconds: 1
+
+# 生成账号密码哈希用的固定 salt 的后缀（见 tasks/primary.yml），salt 不是密码，不需要保密
+mysql_salt_suffix: "@ops-mall"
 
 # 主库还是从库，由 inventory 分组决定
 mysql_role: "{{ 'replica' if inventory_hostname in groups['db_replica'] else 'primary' }}"

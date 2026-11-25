@@ -1,9 +1,10 @@
-# kubeadm init 配置（kubeadm.k8s.io/v1beta4，kubeadm v1.31 起可用）
+# kubeadm init 配置（kubeadm.k8s.io/v1beta4，kubeadm v1.31 起可用，写作时 v1.36、v1.37 的默认版本都是它）
+# kubeadm v1.37 源码里新增了 kubeadm.k8s.io/v1，但 v1beta4 仍是优先版本，本实验先装 v1.36，继续用 v1beta4
 # 用法（k8s-master 上）：
 #   sudo kubeadm config validate --config kubeadm-config.yaml
 #   sudo kubeadm config images pull --config kubeadm-config.yaml
 #   sudo kubeadm init --config kubeadm-config.yaml --upload-certs
-# 写作时 v1.35 最新补丁是 v1.35.10，按 dnf list --showduplicates kubeadm 的结果改
+# 写作时 v1.36 最新补丁是 v1.36.6，按 apt-cache madison kubeadm 的结果改
 apiVersion: kubeadm.k8s.io/v1beta4
 kind: InitConfiguration
 localAPIEndpoint:
@@ -21,7 +22,7 @@ nodeRegistration:
 apiVersion: kubeadm.k8s.io/v1beta4
 kind: ClusterConfiguration
 clusterName: ops-mall-lab
-kubernetesVersion: v1.35.10
+kubernetesVersion: v1.36.6
 # 用域名不用 IP：以后加第二、三台控制平面或者前面放负载均衡，只改 hosts / DNS，不用重签证书
 controlPlaneEndpoint: k8s-api.lab.local:6443
 # 国内拉不到 registry.k8s.io，换成阿里云同步的镜像

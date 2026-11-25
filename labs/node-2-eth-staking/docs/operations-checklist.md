@@ -4,7 +4,7 @@
 
 ## 上线前
 - [ ] 机器：4 核以上 CPU、16G 以上内存（32G 更稳）、NVMe SSD；Hoodi 写作时 EL + CL 约 150-250G，预留 500G
-- [ ] 时间同步：`chronyd` 运行中，偏差小于 100ms（`chronyc tracking`）
+- [ ] 时间同步：`timedatectl` 显示 `System clock synchronized: yes`；生产建议装 chrony（`sudo apt install -y chrony`），`chronyc tracking` 偏差小于 100ms
 - [ ] 防火墙：P2P 端口 30303 TCP/UDP、9000 TCP/UDP、9001 UDP 对公网开放；8545、5052、5064、18550 不对公网开放
 - [ ] 执行层、共识层已同步，`bash scripts/validator-status.sh` 能查到验证者
 - [ ] `.env` 里 `FEE_RECIPIENT` 是自己控制的地址

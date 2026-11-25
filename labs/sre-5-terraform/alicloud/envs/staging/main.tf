@@ -25,9 +25,11 @@ data "alicloud_instance_types" "candidate" {
   instance_charge_type = "PostPaid"
 }
 
-data "alicloud_images" "rocky9" {
+# 阿里云公共镜像 ID 形如 ubuntu_24_04_x64_20G_alibase_20261016.vhd，
+# 以 https://help.aliyun.com/zh/ecs/ubuntu-image 的发布记录为准；ARM 实例改成 ubuntu_24_04_arm64 和 arm64
+data "alicloud_images" "ubuntu2404" {
   owners       = "system"
-  name_regex   = "^rockylinux_9"
+  name_regex   = "^ubuntu_24_04_x64_20G_alibase_"
   architecture = "x86_64"
   most_recent  = true
 }
@@ -62,7 +64,7 @@ module "ecs" {
   vswitch_id        = module.network.vswitch_id
   security_group_id = module.network.security_group_id
   instance_type     = local.instance_type
-  image_id          = data.alicloud_images.rocky9.images[0].id
+  image_id          = data.alicloud_images.ubuntu2404.images[0].id
   key_pair_name     = alicloud_ecs_key_pair.lab.key_pair_name
   tags              = local.tags
 }

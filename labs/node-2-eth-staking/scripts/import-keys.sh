@@ -6,6 +6,8 @@
 #   不保存：每次启动都要人工输入，掉线时间可能很长。测试网建议保存，并保证数据目录权限 700
 set -euo pipefail
 # shellcheck source=common.sh
+# common.sh 和本脚本在同一目录，单独做 shellcheck
+# shellcheck disable=SC1091
 source "$(dirname "$0")/common.sh"
 
 keys_dir="${1:?用法：bash scripts/import-keys.sh <validator_keys 目录>}"

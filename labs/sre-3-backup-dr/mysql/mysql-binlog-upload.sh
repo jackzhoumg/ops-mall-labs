@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 把已经关闭的 binlog 增量上传到 MinIO。由 mall-mysql-binlog-upload.timer 每 5 分钟调用。
+# 把已经关闭的 binlog 增量上传到对象存储（SeaweedFS）。由 mall-mysql-binlog-upload.timer 每 5 分钟调用。
 # RPO（最多丢多少数据）约等于这个间隔：主库连同磁盘一起没了，最多丢最近 5 分钟的事务。
 #
 # 用法（lab-db1，root：要读 MySQL 数据目录里的 binlog 文件）：

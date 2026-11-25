@@ -28,4 +28,14 @@ python3 scripts/capacity-calc.py --base-peak-rps 300 --growth 3 --per-instance-r
 
 ## 写作时版本
 
-k6 v2.4.0、metrics-server v0.9.1、KEDA v2.21.1（官方说明测试过 Kubernetes 1.34–1.36）。以各项目官方文档为准。
+k6 v2.4.0、metrics-server v0.9.1、KEDA v2.21.1（官方兼容表测试过 Kubernetes 1.34–1.36，还没覆盖课程用的 1.37）。以各项目官方文档为准。
+
+## 验证记录
+
+在 Ubuntu 24.04 容器里真跑通过：
+
+- k6 v2.4.0 用官方 APT 源（DEB822 写法）安装
+- `scripts/loadtest-data.sh prepare` → `k6 run -e PROFILE=smoke k6/mall-load.js` → `scripts/loadtest-data.sh cleanup`：mall-api（`cd app && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build`）单实例连 MySQL 8.4，k6 直接压 `http://127.0.0.1:8080`。363 个请求，失败率 0，6 个阈值全部通过；cleanup 删除压测订单 61 条并恢复库存
+- 脚本 `shellcheck` + `bash -n` 通过
+
+没有验证：step / stress / soak 三种加压方式（单机容器资源有限，且容量数据要在 K8s 里测才有意义）；`k8s/` 下的 HPA、KEDA、metrics-server、PodMonitor 等所有 K8s 部分（不连集群，只做 YAML 语法检查）；`scripts/watch-scaling.sh` 依赖集群。

@@ -31,8 +31,8 @@ rm -f "${FILE}"
 avail_kb=$(df --output=avail -k "${DIR}" | tail -n 1 | tr -d ' ')
 (( avail_kb > 2048 )) || die "${DIR} 剩余空间太少（${avail_kb}KB），先清理一下"
 fallocate -l "$(( avail_kb - 1024 ))K" "${FILE}"
-# 把剩下的一点也写满
-dd if=/dev/zero of="${DIR}/logs/.fill" bs=1M count=2 status=none 2>/dev/null || true
+# 把剩下的一点也写满（只剩约 1M，dd 写到 No space left on device 自己停）
+dd if=/dev/zero of="${DIR}/logs/.fill" bs=64K status=none 2>/dev/null || true
 
 # 模拟一个一直打开着日志文件的程序。sleep 3>&- 让子进程不继承这个文件描述符
 # shellcheck disable=SC2016 # $1 要在子 shell 里展开

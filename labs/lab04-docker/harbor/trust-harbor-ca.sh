@@ -5,7 +5,7 @@
 #   scp ops@192.168.56.15:/data/cert/ca.crt /tmp/harbor-ca.crt
 #   sudo ./trust-harbor-ca.sh /tmp/harbor-ca.crt
 #
-# 支持 Rocky Linux 9（update-ca-trust）和 Ubuntu 24.04（update-ca-certificates）
+# 按 Ubuntu 24.04 编写（update-ca-certificates）。RHEL 系把 CA 放 /etc/pki/ca-trust/source/anchors/ 再 update-ca-trust
 
 set -Eeuo pipefail
 
@@ -26,16 +26,15 @@ main() {
     exit 2
   fi
 
-  # 1. 系统信任：curl、浏览器（部分）、Go 程序都会用
-  if command -v update-ca-trust >/dev/null; then
-    cp "$CA_FILE" /etc/pki/ca-trust/source/anchors/ops-mall-lab-ca.crt
-    update-ca-trust extract
-    log INFO "已加入系统信任（RHEL 系）"
-  elif command -v update-ca-certificates >/dev/null; then
-    cp "$CA_FILE" /usr/local/share/ca-certificates/ops-mall-lab-ca.crt
-    update-ca-certificates
-    log INFO "已加入系统信任（Debian / Ubuntu 系）"
+  # 1. 系统信任：curl、Go 程序（mall-api、Harbor 客户端工具）都读系统信任库
+  #    Ubuntu 只认 /usr/local/share/ca-certificates/ 下 .crt 结尾的文件
+  if ! command -v update-ca-certificates >/dev/null; then
+    echo "找不到 update-ca-certificates，先 apt install -y ca-certificates" >&2
+    exit 2
   fi
+  cp "$CA_FILE" /usr/local/share/ca-certificates/ops-mall-lab-ca.crt
+  update-ca-certificates
+  log INFO "已加入系统信任（/etc/ssl/certs/ca-certificates.crt）"
 
   # 2. Docker：/etc/docker/certs.d/<仓库域名>/ca.crt，不需要重启 dockerd
   if command -v docker >/dev/null; then

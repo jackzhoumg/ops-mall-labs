@@ -22,7 +22,6 @@ lab_hosts:
 # ---------- 数据库 ----------
 mysql_primary_host: "{{ hostvars[groups['db_primary'][0]]['ansible_host'] }}"
 mysql_port: 3306
-mysql_root_password: "{{ vault_mysql_root_password }}"
 mysql_repl_user: repl
 mysql_repl_password: "{{ vault_mysql_repl_password }}"
 mysql_backup_user: backup
@@ -41,5 +40,6 @@ redis_password: "{{ vault_redis_password }}"
 mall_version: v1.0.0
 
 # ---------- 巡检脚本（common 角色部署，每 10 分钟跑一次） ----------
-inspect_services: "sshd chronyd"
+# 写 Ubuntu 上的 systemd 服务名：ssh（不是 sshd）、chrony、cron、mysql、redis-server
+inspect_services: "ssh chrony cron"
 inspect_cert_files: ""

@@ -1,0 +1,10 @@
+[
+  {
+    "Id": 0,
+    "Tpltype": "wx",
+    "Tpluse": "Custom",
+    "Tplname": "holmes-wx",
+    "Tpl": "### 【AI 分析】{{ .check_name }}\n{{ with .namespace }}> 命名空间：{{ . }}\n{{ end }}\n{{ .message }}\n\n> HolmesGPT 自动分析，仅供参考，以实际排查为准。",
+    "WebhookContentType": ""
+  }
+]

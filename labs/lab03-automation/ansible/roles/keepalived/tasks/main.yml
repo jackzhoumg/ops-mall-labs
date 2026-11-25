@@ -1,5 +1,5 @@
 - name: 安装 Keepalived
-  ansible.builtin.dnf:
+  ansible.builtin.apt:
     name: keepalived
     state: present
 
@@ -20,13 +20,16 @@
   diff: false
   notify: restart keepalived
 
-# VRRP 是 IP 协议号 112，不是 TCP/UDP 端口，firewalld 要用 rich rule 放行
+# VRRP 是 IP 协议号 112，不是 TCP/UDP 端口。ufw 命令行只认 tcp/udp/ah/esp/gre 等几种协议，
+# 放行 VRRP 要写进 ufw 的底层规则文件 before.rules（*filter 表最后的 COMMIT 之前）
 - name: 防火墙放行 VRRP
-  ansible.posix.firewalld:
-    rich_rule: 'rule protocol value="vrrp" accept'
-    permanent: true
-    immediate: true
-    state: enabled
+  ansible.builtin.blockinfile:
+    path: /etc/ufw/before.rules
+    marker: "# {mark} ops-mall vrrp (managed by ansible)"
+    insertbefore: "^COMMIT"
+    block: |
+      -A ufw-before-input -p vrrp -j ACCEPT
+  notify: reload ufw
 
 - name: 启动 Keepalived
   ansible.builtin.systemd_service:

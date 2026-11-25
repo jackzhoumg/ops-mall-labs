@@ -1,8 +1,8 @@
 common_packages:
   - chrony
-  - cronie
-  - firewalld
-  - vim-enhanced
+  - cron
+  - ufw
+  - vim
   - curl
   - tar
   - rsync
@@ -10,11 +10,11 @@ common_packages:
   - sysstat
   - openssl
   - bash-completion
-  # Ansible 操作 SELinux 布尔值、firewalld 需要的 Python 库
-  - python3-libselinux
-  - python3-libsemanage
-  - python3-firewall
-
+  - ca-certificates
+  # ansible.builtin.apt 模块要用；Ubuntu Server 默认已装，最小化镜像可能没有
+  - python3-apt
+  # ansible.builtin.deb822_repository 模块要用（mysql、nginx 角色添加官方 APT 源）
+  - python3-debian
 common_sysctl:
   net.core.somaxconn: 1024
   vm.swappiness: 10

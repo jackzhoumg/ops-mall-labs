@@ -1,0 +1,30 @@
+# HolmesGPT CLI 配置（AIOps-2 主线）。复制到 ~/.holmes/config.yaml：
+#   mkdir -p ~/.holmes && cp holmes/config.example.yaml ~/.holmes/config.yaml
+# 写作时版本 HolmesGPT 0.47.0，字段以 https://holmesgpt.dev 当前文档为准。
+#
+# 模型不写在这里，用环境变量（不要把 Key 写进任何文件）：
+#   export OPENAI_API_BASE=https://llm.example.com/v1      # 任意 OpenAI 兼容接口，必须支持 function calling
+#   export OPENAI_API_KEY=sk-REPLACE_ME
+#   holmes ask "..." --model openai/your-chat-model         # openai/ 前缀表示"按 OpenAI 兼容协议调用"
+
+# holmes investigate alertmanager 默认从这里拉告警（命令行 --alertmanager-url 优先）
+alertmanager_url: http://alertmanager.lab.local
+
+toolsets:
+  # 指标：Lab 09 的 Prometheus（集群外用网关域名，集群内用 Service 地址）
+  prometheus/metrics:
+    enabled: true
+    config:
+      prometheus_url: http://prometheus.lab.local
+  # 日志：Lab 10 的 Loki 直连。Lab 10 开了多租户，mall-api 的日志在租户 mall
+  grafana/loki:
+    enabled: true
+    config:
+      api_url: http://loki.lab.local
+      additional_headers:
+        X-Scope-OrgID: mall
+  # 下面两个会把数据或问题发到公网 / 第三方，实验和生产都关掉
+  internet:
+    enabled: false
+  robusta:
+    enabled: false

@@ -1,7 +1,40 @@
+- name: 添加 nginx.org 官方 APT 源
+  ansible.builtin.deb822_repository:
+    name: nginx
+    types: deb
+    uris: "{{ nginx_apt_uri }}"
+    suites: "{{ ansible_facts['distribution_release'] }}"
+    components: nginx
+    signed_by: "{{ nginx_apt_key_url }}"
+    state: present
+  register: nginx_repo
+
+# nginx.org 官方文档要求的 pin：两个源都有 nginx 包时，固定用 nginx.org 的，
+# 防止哪天 Ubuntu 源里的版本号更高，apt upgrade 把它换掉（配置目录布局都不一样）
+- name: 优先使用 nginx.org 的包
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/99nginx
+    content: |
+      Package: *
+      Pin: origin nginx.org
+      Pin: release o=nginx
+      Pin-Priority: 900
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: 安装 Nginx
-  ansible.builtin.dnf:
+  ansible.builtin.apt:
     name: nginx
     state: present
+    update_cache: "{{ nginx_repo is changed }}"
+
+# nginx.org 的包自带 conf.d/default.conf（监听 80 的欢迎页），删掉，免得它抢默认站点
+- name: 删除自带的默认站点
+  ansible.builtin.file:
+    path: /etc/nginx/conf.d/default.conf
+    state: absent
+  notify: reload nginx
 
 # ---------- 证书：在控制节点生成一次，两台 web 用同一张 ----------
 - name: 控制节点证书目录
@@ -77,24 +110,17 @@
     mode: "0644"
   notify: reload nginx
 
-# SELinux 默认不允许 nginx 主动连网络端口，反代到 8080 会报 502，
-# audit.log 里能看到 avc: denied { name_connect }。打开这个布尔值，不要关 SELinux。
-- name: 允许 nginx 反向代理连后端
-  ansible.posix.seboolean:
-    name: httpd_can_network_connect
-    state: true
-    persistent: true
-  when: ansible_facts['selinux']['status'] == 'enabled'
-
+# RHEL 系这里还要打开 SELinux 布尔值 httpd_can_network_connect，否则反代 502。
+# Ubuntu 用 AppArmor，nginx.org 的包没有带 AppArmor 配置文件，不用额外处理
 - name: 防火墙开放 http / https
-  ansible.posix.firewalld:
-    service: "{{ item }}"
-    permanent: true
-    immediate: true
-    state: enabled
+  community.general.ufw:
+    rule: allow
+    port: "{{ item }}"
+    proto: tcp
+    comment: nginx
   loop:
-    - http
-    - https
+    - "80"
+    - "443"
 
 - name: 启动 Nginx
   ansible.builtin.systemd_service:

@@ -8,7 +8,7 @@
 #     -f labs/lab09-monitoring/values/kube-prometheus-stack-values.yaml \
 #     -f labs/lab09-monitoring/values/alertmanager-values.yaml
 #
-# 为什么用 continue: true：AI 分析是"附加"的，原来的告警通知（alert-bridge → 群）照常发。
+# 为什么用 continue: true：AI 分析是"附加"的，原来的告警通知（Alertmanager → PrometheusAlert → 群）照常发。
 # 分析服务挂了、大模型挂了，都不影响原始告警送达。
 #
 # 下面是合并后 route 部分的样子（只列出和 Lab 09 不同的地方）：

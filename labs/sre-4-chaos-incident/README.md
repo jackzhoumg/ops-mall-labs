@@ -57,3 +57,21 @@ bash scripts/abort.sh
 kubectl -n mall set env deployment/mall-api MALL_DEBUG-      # 去掉故障接口开关
 helm uninstall chaos-mesh -n chaos-mesh                      # 不再需要 Chaos Mesh 时
 ```
+
+## 写作时版本
+
+Chaos Mesh 2.8.8（Helm Chart 2.8.8），Kubernetes v1.37，节点系统 Ubuntu Server 24.04 LTS。以官方最新文档为准。
+
+## 验证记录
+
+在 Ubuntu 24.04 容器里真跑通过：
+
+- `scripts/steady-state.sh`：对容器里的 mall-api 探测（含 `ORDER=1` 下单），稳态成立时退出码 0；对一个不存在的地址探测，输出“稳态被打破”、退出码 1
+- `scripts/gameday-db-delay.sh`：参数检查、找不到网卡时的提示、加载内核模块失败时的提示和退出码
+- `k8s/prometheusrule-drill.yaml` 的规则用 promtool v3.16.0 `check rules` 通过
+- 脚本 `shellcheck` + `bash -n` 通过
+
+没有验证：
+
+- `gameday-db-delay.sh start / status / stop` 真正注入 tc netem 延迟：验证机的宿主机内核没有加载 `sch_netem` / `sch_prio`，容器里执行 tc 会触发宿主机自动加载内核模块，属于改动宿主机，按验证规则没有做。已确认 Ubuntu 24.04 generic 内核（6.8.0-151）的 `linux-modules` 包里自带这两个模块。需要讲师在允许加载模块的机器上补测：`sudo modprobe sch_netem sch_prio` 后执行 `start`、`status`、`stop`，并确认 `systemd-run` 的自动撤销定时器生效
+- Chaos Mesh 安装、`experiments/`、`k8s/`、`scripts/abort.sh`、`scripts/preflight-check.sh`、`scripts/debug-faults.sh`：需要 K8s 集群，只做了 YAML 语法检查

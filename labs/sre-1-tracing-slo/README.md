@@ -44,4 +44,16 @@ sloth validate -i slo/sloth/mall-api.sloth.yml
 
 ## 写作时版本
 
-Envoy Gateway v1.10.0、OpenTelemetry Collector contrib 0.165.0、Jaeger v2.23.0、Sloth v0.16.0、Prometheus v3.16.0。以各项目官方文档为准。
+Envoy Gateway v1.10.0、OpenTelemetry Collector contrib 0.165.0（0.166.0 于 2026-11-24 发布，写作时 contrib 的二进制还没上传完，先用 0.165.0）、Jaeger v2.23.0、Sloth v0.16.0、Prometheus v3.16.0，集群按 Kubernetes v1.37。以各项目官方文档为准。
+
+## 验证记录
+
+在 Ubuntu 24.04 容器里真跑通过：
+
+- `promtool check rules`（promtool v3.16.0）：手写规则 29 条、Sloth 生成规则 34 条
+- `promtool test rules slo/rules/mall-api-slo.rules.test.yml`：通过。验证时发现快烧告警的 description 期望值（当前错误比例）和 v3.16.0 的计算结果不一致（期望 5.097%，实际 4.969%，差异来自 `rate()` 的外推），已按 v3.16.0 的实测值修正测试，规则本身没改
+- `sloth validate` 通过；`sloth generate`（v0.16.0）生成的规则除第一行版权注释外和 `slo/sloth/generated/mall-api.rules.yml` 一致
+- `tracing/otel-collector.yaml` 里的 Collector 配置用 otelcol-contrib 0.165.0 `validate` 通过
+- 脚本 `shellcheck` + `bash -n` 通过
+
+没有验证：Jaeger、OTel Collector、Envoy Gateway 追踪、PrometheusRule、Grafana 大盘、Alertmanager 路由等所有 K8s 部分（不连集群，只做 YAML 语法检查）；`gen-traffic.sh`、`slo-report.sh` 依赖集群里的 mall-api 和 Prometheus，没有跑。

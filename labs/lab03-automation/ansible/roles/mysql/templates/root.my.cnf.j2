@@ -1,5 +1,5 @@
 # {{ ansible_managed }}
+# root@localhost 用 auth_socket 认证，不需要密码；写这个文件是让 ansible.mysql 模块和 mysql 命令都走本机 socket
 [client]
 user=root
-password="{{ mysql_root_password }}"
 socket={{ mysql_socket }}

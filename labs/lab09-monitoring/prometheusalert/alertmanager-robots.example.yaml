@@ -1,0 +1,28 @@
+# Lab 09：Alertmanager 调用 PrometheusAlert 的完整地址（含群机器人 key），放在 Secret 里。
+# kube-prometheus-stack 按 alertmanager-values.yaml 里的 alertmanagerSpec.secrets 把它挂到
+#   /etc/alertmanager/secrets/alertmanager-robots/<键名>
+# Alertmanager 的 webhook_configs 用 url_file 读这个文件，地址不出现在 Helm values 和 Git 里。
+#
+# 用法（k8s-master）：
+#   cp prometheusalert/alertmanager-robots.example.yaml ~/alertmanager-robots.yaml
+#   vi ~/alertmanager-robots.yaml        # 把 key 换成真实的；文件放在仓库外面，不要提交
+#   kubectl apply -f ~/alertmanager-robots.yaml
+# 先不填真实 key 也可以 apply：消息会发到不存在的机器人，PrometheusAlert 日志里能看到渲染结果和报错（演练模式）。
+#
+# 地址格式：http://prometheusalert.monitoring.svc:8080/prometheusalert?type=<渠道>&tpl=<模板名>&<渠道地址参数>=<机器人地址>
+#   企业微信群机器人：type=wx&tpl=ops-mall-wx&wxurl=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=<key>
+#   钉钉群机器人：    type=dd&tpl=prometheus-dd&ddurl=https://oapi.dingtalk.com/robot/send?access_token=<token>
+#   多个群用英文逗号隔开：wxurl=<地址1>,<地址2>；@某人：加 &at=<企业微信账号>
+apiVersion: v1
+kind: Secret
+metadata:
+  name: alertmanager-robots
+  namespace: monitoring
+type: Opaque
+stringData:
+  # P2 / P3：运维群
+  ops-wecom-url: "http://prometheusalert.monitoring.svc:8080/prometheusalert?type=wx&tpl=ops-mall-wx&wxurl=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=替换成运维群机器人的key"
+  # P1：值班群
+  oncall-wecom-url: "http://prometheusalert.monitoring.svc:8080/prometheusalert?type=wx&tpl=ops-mall-wx&wxurl=https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=替换成值班群机器人的key"
+  # P1：钉钉值班群（不用钉钉的，删掉 alertmanager-values.yaml 里 oncall-p1 的第二个 webhook）
+  oncall-dingtalk-url: "http://prometheusalert.monitoring.svc:8080/prometheusalert?type=dd&tpl=prometheus-dd&ddurl=https://oapi.dingtalk.com/robot/send?access_token=替换成钉钉机器人的token"

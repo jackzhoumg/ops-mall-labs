@@ -1,0 +1,76 @@
+# HolmesGPT Helm values（AIOps-2 主线：集群内常驻，提供 HTTP API）
+# 写作时版本：Chart robusta/holmes 0.47.0（appVersion 0.47.0，镜像 robustadev/holmes:0.47.0）
+#
+# 安装（k8s-master）：
+#   helm repo add robusta https://robusta-charts.storage.googleapis.com && helm repo update
+#   kubectl apply -f holmes/rbac-namespace-scoped.yaml
+#   kubectl -n monitoring create secret generic holmes-llm \
+#     --from-literal=OPENAI_API_KEY='sk-REPLACE_ME' --from-literal=HOLMES_API_KEY="$(openssl rand -hex 24)"
+#   helm upgrade --install holmes robusta/holmes --version 0.47.0 -n monitoring -f holmes/values.yaml
+# 以 https://holmesgpt.dev 当前文档为准。
+
+# 不用 Chart 自带的集群级只读 ClusterRole，改用 rbac-namespace-scoped.yaml 里只读 mall / monitoring 的 Role
+createServiceAccount: false
+customServiceAccountName: holmes
+
+additionalEnvVars:
+  # 告诉 Holmes 它只能看这两个命名空间，调查一开始就用带 -n 的命令，不会先撞一堆 forbidden
+  - name: SCOPED_NAMESPACES
+    value: "mall,monitoring"
+  # 任意 OpenAI 兼容接口（云厂商兼容模式、vLLM、LiteLLM 代理……），模型必须支持 function calling
+  - name: OPENAI_API_BASE
+    value: "https://llm.example.com/v1"
+  - name: OPENAI_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: holmes-llm
+        key: OPENAI_API_KEY
+  # 设置后 /api/* 都要带 X-API-Key 头（/healthz、/readyz 除外）。不设的话集群里任何 Pod 都能调它、花你的模型额度
+  - name: HOLMES_API_KEY
+    valueFrom:
+      secretKeyRef:
+        name: holmes-llm
+        key: HOLMES_API_KEY
+
+# HTTP API 里 "model" 字段填这里的键名（lab-model），不是模型本身的名字
+modelList:
+  lab-model:
+    api_key: "{{ env.OPENAI_API_KEY }}"
+    api_base: "{{ env.OPENAI_API_BASE }}"
+    model: openai/your-chat-model
+    temperature: 0
+
+toolsets:
+  kubernetes/core:
+    enabled: true
+  kubernetes/logs:
+    enabled: true
+  # Lab 09：kube-prometheus-stack 的 Prometheus Service
+  prometheus/metrics:
+    enabled: true
+    config:
+      prometheus_url: http://kube-prometheus-stack-prometheus.monitoring.svc:9090
+  # Lab 10：Loki 网关；开了多租户，要带 X-Scope-OrgID
+  grafana/loki:
+    enabled: true
+    config:
+      api_url: http://loki-gateway.logging.svc.cluster.local
+      additional_headers:
+        X-Scope-OrgID: mall
+  # Chart 默认打开的几个，按"数据不出内网、只读"的原则关掉：
+  # robusta：连 Robusta 云平台；internet：去公网抓网页（问题和上下文会出现在请求里）；
+  # bash：在 Pod 里执行 shell 命令（有白名单，但实验里用不到，关掉更省心）
+  robusta:
+    enabled: false
+  internet:
+    enabled: false
+  bash:
+    enabled: false
+
+# 资源用 Chart 默认值（requests/limits 内存 2048Mi）。调查时要缓存工具输出，调小容易 OOM
+
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL

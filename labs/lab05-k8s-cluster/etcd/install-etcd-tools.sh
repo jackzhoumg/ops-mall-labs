@@ -3,10 +3,10 @@
 #
 # 用法：
 #   sudo ./install-etcd-tools.sh                    # 自动从 etcd 静态 Pod 清单里读版本
-#   sudo ETCD_VERSION=v3.6.6 ./install-etcd-tools.sh
+#   sudo ETCD_VERSION=v3.6.8 ./install-etcd-tools.sh
 #   sudo ETCD_MIRROR=https://github.com/etcd-io/etcd/releases/download ./install-etcd-tools.sh
 #
-# 写作时 kubeadm v1.35 默认 etcd 3.6.6，v1.36 默认 3.6.8
+# 写作时 kubeadm v1.36 默认 etcd 3.6.8，v1.37 默认 3.7.0（升级后要重新执行本脚本换成同版本工具）
 # 对应教程：Lab 05 K8s 集群搭建与日常维护
 set -Eeuo pipefail
 
@@ -25,7 +25,7 @@ main() {
     exit 2
   fi
   if [[ -z "$ETCD_VERSION" ]]; then
-    # 镜像标签形如 etcd:3.6.6-0，取 -0 前面的部分
+    # 镜像标签形如 etcd:3.6.8-0，取 -0 前面的部分
     ETCD_VERSION="v$(grep -oE 'etcd:[0-9.]+' "$MANIFEST" | head -1 | cut -d: -f2)"
   fi
   local arch
@@ -35,9 +35,9 @@ main() {
     *) echo "不支持的架构 $(uname -m)" >&2; exit 2 ;;
   esac
   local pkg="etcd-${ETCD_VERSION}-linux-${arch}"
-  local tmp
+  # tmp 不能用 local：EXIT trap 在 main 返回后才执行，那时局部变量已经没了，set -u 会让脚本以 1 退出
   tmp="$(mktemp -d)"
-  trap 'rm -rf "$tmp"' EXIT
+  trap 'rm -rf "${tmp:-}"' EXIT
   log INFO "下载 ${ETCD_MIRROR}/${ETCD_VERSION}/${pkg}.tar.gz"
   curl -fsSL "${ETCD_MIRROR}/${ETCD_VERSION}/${pkg}.tar.gz" -o "${tmp}/etcd.tgz"
   tar -xzf "${tmp}/etcd.tgz" -C "$tmp"

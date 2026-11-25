@@ -1,12 +1,18 @@
 # Lab 09：Alertmanager 路由、分组、抑制、静默时段
 # 和 kube-prometheus-stack-values.yaml 一起传给 helm（-f 两个文件，后面的覆盖前面的）。
 #
-# 通知链路：Alertmanager --webhook--> alert-bridge（本实验自带的转换服务）--> 企业微信 / 钉钉群机器人
-# 为什么要转换服务：Alertmanager 原生 wechat_configs 走的是企业微信"自建应用"API
+# 通知链路：Alertmanager --webhook--> PrometheusAlert（开源告警网关）--> 企业微信 / 钉钉群机器人
+# 为什么要网关：Alertmanager 原生 wechat_configs 走的是企业微信"自建应用"API
 # （要 corp_id、agent_id、应用 secret，还要配可信 IP），不是群机器人 webhook；
 # 原生也没有钉钉接收器。群机器人要的 JSON 格式和 Alertmanager webhook 发出的格式不一样，中间必须转一下。
-
+#
+# 机器人地址不写在这里：webhook 用 url_file 读 Secret alertmanager-robots 挂进来的文件，
+# 先按 prometheusalert/alertmanager-robots.example.yaml 建好 Secret，再 helm upgrade，否则 Alertmanager Pod 起不来。
 alertmanager:
+  alertmanagerSpec:
+    # 把 Secret 挂到 /etc/alertmanager/secrets/alertmanager-robots/
+    secrets:
+      - alertmanager-robots
   config:
     global:
       resolve_timeout: 5m
@@ -93,14 +99,14 @@ alertmanager:
       - name: "null"
       - name: ops-wecom
         webhook_configs:
-          - url: http://alert-bridge.monitoring.svc:8080/wecom/ops
+          - url_file: /etc/alertmanager/secrets/alertmanager-robots/ops-wecom-url
             send_resolved: true
             max_alerts: 20
       - name: oncall-p1
         webhook_configs:
-          - url: http://alert-bridge.monitoring.svc:8080/wecom/oncall
+          - url_file: /etc/alertmanager/secrets/alertmanager-robots/oncall-wecom-url
             send_resolved: true
             max_alerts: 20
-          - url: http://alert-bridge.monitoring.svc:8080/dingtalk/oncall
+          - url_file: /etc/alertmanager/secrets/alertmanager-robots/oncall-dingtalk-url
             send_resolved: true
             max_alerts: 20

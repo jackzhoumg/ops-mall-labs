@@ -1,7 +1,7 @@
 # Node-1：不用 Docker 时，用 systemd 管理 Geth（二进制方式）
 # 安装：
 #   sudo useradd --system --no-create-home --shell /usr/sbin/nologin eth
-#   下载 https://geth.ethereum.org/downloads/ 的 geth-linux-amd64-1.17.10-*.tar.gz，解压后 sudo install -m 0755 geth /usr/local/bin/
+#   下载 https://geth.ethereum.org/downloads/ 的 geth-linux-amd64-1.17.10-1df30b18.tar.gz（地址 https://gethstore.blob.core.windows.net/builds/ ），解压后 sudo install -m 0755 geth /usr/local/bin/
 #   sudo mkdir -p /data/eth/geth && sudo chown -R eth:eth /data/eth
 #   sudo cp geth.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now geth
 # JWT 文件权限：sudo chown root:eth /data/eth/jwt/jwt.hex && sudo chmod 640 /data/eth/jwt/jwt.hex

@@ -35,7 +35,7 @@
 | 检查项 | 命令 / 方法 | 结果 |
 |---|---|---|
 | 最近一次 Velero 备份成功 | `velero backup get` | |
-| 最近一次 MySQL 全备成功，binlog 上传正常 | `rclone lsf minio:mysql-backup/full/`、`journalctl -u mall-mysql-binlog-upload` | |
+| 最近一次 MySQL 全备成功，binlog 上传正常 | `rclone lsf s3backup:mysql-backup/full/`、`journalctl -u mall-mysql-binlog-upload` | |
 | 主从复制正常、延迟为 0 | `mysql/failover/check-replication.sh` | |
 | 恢复用的临时机器、镜像、工具已就绪 | lab-dev 上 `docker image ls mysql`、`rclone version` | |
 | 演练手册每个人都读过 | | |

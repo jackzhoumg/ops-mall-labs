@@ -1,0 +1,30 @@
+# /etc/mysql/mysql.conf.d/mall.cnf（lab-db1，主库）
+# 只写要改的参数，不动包自带的 /etc/mysql/mysql.conf.d/mysqld.cnf（datadir、socket、pid-file、log-error 在那里定义），
+# 升级 MySQL 包时不会冲突。和 Lab 03 roles/mysql/templates/mall.cnf.j2 渲染结果一致
+# 改完：sudo systemctl restart mysql
+[mysqld]
+bind-address=0.0.0.0
+port=3306
+# 不做 DNS 反查，避免 DNS 慢导致连接卡住；授权里只能用 IP
+skip-name-resolve
+max_connections=500
+character-set-server=utf8mb4
+collation-server=utf8mb4_0900_ai_ci
+# 2G 内存的实验机给 512M；生产一般给物理内存的 50%-70%
+innodb_buffer_pool_size=512M
+# ---- 复制 ----
+# server-id 在主从集群里必须唯一：主库 1，从库 2
+server-id=1
+# 不用 8.4 默认的 binlog 这个名字：装包时已经生成了 binlog.000001（那时 GTID 还没开）。
+# 换个新名字，从开启 GTID 之后才开始记，从库用 SOURCE_AUTO_POSITION 复制时不用操心旧文件里有没有不带 GTID 的事务
+log-bin=mysql-bin
+# binlog 保留 7 天，做时间点恢复最多能回到 7 天前（前提是有 7 天内的全备）
+binlog_expire_logs_seconds=604800
+gtid_mode=ON
+enforce_gtid_consistency=ON
+# ---- 慢查询 ----
+slow_query_log=ON
+# 放在 /var/log/mysql 下：包自带的 AppArmor 配置（/etc/apparmor.d/usr.sbin.mysqld）只允许 mysqld 写
+# /var/lib/mysql 和 /var/log/mysql 这些目录，写到别处会被 AppArmor 拒绝，MySQL 起不来
+slow_query_log_file=/var/log/mysql/mysql-slow.log
+long_query_time=1

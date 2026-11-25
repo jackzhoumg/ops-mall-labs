@@ -42,8 +42,8 @@ helm install ops-mall labs/lab08-gitops/charts/ops-mall -n mall-staging -f labs/
 | 组件 | 版本 |
 |---|---|
 | Helm | v4.3.x（Chart 为 apiVersion v2，Helm 3 也能用） |
-| Argo CD | v3.6.2 |
-| Argo Rollouts | v1.10.2 |
+| Argo CD | v3.6.3（官方测试过 K8s v1.34-v1.37） |
+| Argo Rollouts | v1.10.2（官方 e2e 测试矩阵到 K8s v1.35，v1.37 上未列入官方测试） |
 | Rollouts Gateway API 插件 | v0.18.0 |
 | Sealed Secrets | v0.41.2 |
 | yq | v4.54.3（在 ci-tools 镜像里） |
@@ -55,3 +55,7 @@ helm install ops-mall labs/lab08-gitops/charts/ops-mall -n mall-staging -f labs/
 - Gateway 来自 Lab 06，按约定是 `envoy-gateway-system` 命名空间里的 `lab-gateway`；名字不同时改 `values.yaml` 的 `httpRoute.parentRefs` 和 `argocd/argocd-httproute.yaml`。Gateway 监听器必须允许 `mall-staging`、`mall-prod`、`argocd` 命名空间的路由挂载（`allowedRoutes.namespaces.from: All` 或按标签选择）。
 - MySQL / Redis 仍在 lab-db1（192.168.56.13），每个命名空间各自有 `mysql`、`redis` 两个无选择器 Service。
 - 镜像 `harbor.lab.local/mall/mall-api:<tag>`、`harbor.lab.local/mall/mall-web:<tag>`，tag 由 CI 写入，不用 latest。
+## 验证记录
+- 已验证（本地静态检查）：`helm lint charts/ops-mall`、`helm template` 分别叠加 `values-staging.yaml`、`values-prod.yaml` 都能正常渲染；YAML 语法检查通过；脚本 `shellcheck` + `bash -n` 通过。Argo CD v3.6.3 的 `install.yaml` 里 argocd-cm 的 `resource.exclusions` 和 v3.6.2 一致，`argocd/argocd-cm-patch.yaml` 不用改。
+- 没验证：Argo CD、Argo Rollouts、Sealed Secrets、Gateway API 插件都需要 K8s 集群，没有部署，K8s 集群验证由讲师另行安排。Argo Rollouts v1.10.2 官方 e2e 测试矩阵只到 K8s v1.35。
+

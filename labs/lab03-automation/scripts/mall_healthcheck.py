@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """mall-api 健康巡检：检查 /healthz、/readyz、/api/products，异常时推送企业微信 / 钉钉机器人。
 
-只用 Python 标准库，Rocky Linux 9 自带的 python3 直接能跑，不用 pip 装依赖。
+只用 Python 标准库，Ubuntu 24.04 自带的 python3（3.12）直接能跑，不用 pip 装依赖。
 
 用法：
     export WECOM_WEBHOOK_URL='https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=xxx'
