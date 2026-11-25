@@ -1,0 +1,18 @@
+# 构建产物
+app/mall-api
+*.exe
+dist/
+
+# 本地密钥和环境
+.env
+*.pem
+*.key
+kubeconfig
+*.tfstate
+*.tfstate.*
+.terraform/
+
+# 编辑器
+.idea/
+.vscode/
+.DS_Store
