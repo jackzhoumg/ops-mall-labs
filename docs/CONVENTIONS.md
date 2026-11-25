@@ -72,8 +72,9 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=v
 | k8s-node2 | 192.168.56.23 | 2C4G | 工作节点 |
 | lab-eth1 / lab-eth2 | 192.168.56.31 / .32 | 4C16G + 大容量 SSD | Node-1 / Node-2（建议用云服务器） |
 
-- 操作系统：**Rocky Linux 9**（与 RHEL / CentOS 体系一致，国内企业常见）。关键命令有差异时，同时给出 Ubuntu 24.04 的写法。
-- 实验用户：`ops`，有 sudo 权限。命令提示符写法：`[ops@lab-web1 ~]$`（普通用户）和 `[root@lab-web1 ~]#`（root）。
+- 操作系统：**Ubuntu Server 24.04 LTS**（全课程只维护这一套，不再写 Rocky / CentOS 的命令）。软件包用 `apt`，防火墙用 `ufw`（底层 nftables），网络用 netplan（`/etc/netplan/*.yaml`），强制访问控制是 AppArmor。国内软件源用阿里云或清华镜像（24.04 的源配置文件是 `/etc/apt/sources.list.d/ubuntu.sources`，DEB822 格式）。
+- 讲到 RHEL 体系时只用一两句对照（如“RHEL 系用 dnf / firewalld / SELinux”），方便学员面试时能说清区别，不展开操作。
+- 实验用户：`ops`，有 sudo 权限。命令提示符写法：`ops@lab-web1:~$`（普通用户）和 `root@lab-web1:~#`（root）。
 - 不用的虚拟机关掉。同时开机的机器一般不超过 4 台。
 - 云服务器方案：按量计费，实验完立刻释放；教程里给出释放提醒。
 
@@ -91,13 +92,13 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=v
 - Dockerfile：`labs/lab04-docker/Dockerfile.api`、`labs/lab04-docker/Dockerfile.web`，构建上下文是仓库根目录。
 - K8s 命名空间：`mall`（应用）、`mall-staging` / `mall-prod`（Lab 08 多环境）、`monitoring`、`logging`、`argocd`。
 - 标签：`app.kubernetes.io/name: mall-api`、`app.kubernetes.io/part-of: ops-mall`。
-- Kubernetes 版本：写作时使用 **v1.36**，容器运行时 containerd，网络插件 Calico。
+- Kubernetes 版本：写作时最新为 **v1.37**，容器运行时 containerd，网络插件 Calico。
 - 流量入口：**Gateway API + Envoy Gateway**。Ingress NGINX 已于 2026 年 3 月由 Kubernetes 官方停止维护（不再修复安全漏洞），教程里要讲清这一点：很多公司的存量集群还在用 Ingress / Ingress NGINX，要能看懂和维护，但新集群用 Gateway API。替代方案对比里列出 NGINX Gateway Fabric、Higress、Traefik、Cilium 和云厂商负载均衡。
 - 入口暴露方式：裸机实验集群用 MetalLB（L2 模式）分配 `192.168.56.200-192.168.56.220`，网关拿 `192.168.56.200`；没有 MetalLB 时用 NodePort。
 - 证书：cert-manager，实验用自签 CA（`lab.local` 没法申请公网证书）。
 - 数据库位置：Lab 06 起 mall-api 跑在 K8s 里，**MySQL 和 Redis 仍然跑在 lab-db1（192.168.56.13）**。很多公司的数据库不上 K8s，这也让实验机器少一台。K8s 里在 `mall` 命名空间建无选择器的 Service `mysql`（3306）和 `redis`（6379），配 EndpointSlice 指向 192.168.56.13，应用用 `mysql.mall.svc:3306`、`redis.mall.svc:6379` 访问。
-- Kubernetes 安装路线：Lab 05 先装 **v1.35**，再在实验里升级到 **v1.36**，让学员练一次真实的集群升级。
-- Apple Silicon（M 系列）Mac：虚拟机只能跑 arm64 系统。Rocky Linux 9 有 aarch64 版本，mall-api 也能编译 arm64；Harbor 从 v2.16.0 起提供 arm64 离线安装包；仍有个别镜像只有 amd64，遇到时提醒学员改用云服务器或替代方案。
+- Kubernetes 安装路线：Lab 05 先装 **v1.36**，再在实验里升级到 **v1.37**，让学员练一次真实的集群升级。之后的实验都按 v1.37 写。
+- Apple Silicon（M 系列）Mac：虚拟机只能跑 arm64 系统。Ubuntu 24.04 有 arm64 版本，mall-api 也能编译 arm64；Harbor 从 v2.16.0 起提供 arm64 离线安装包；仍有个别镜像只有 amd64，遇到时提醒学员改用云服务器或替代方案。
 - 国内网络：`registry.k8s.io`、Docker Hub、GitHub 下载经常不通。每个用到外网镜像或下载的实验，都要写“国内网络怎么办”：kubeadm 用 `--image-repository registry.aliyuncs.com/google_containers`，软件源用阿里云 / 清华镜像，Docker Hub 镜像建议用云厂商镜像仓库或境外 / 香港按量服务器中转。
 
 ### K8s 资源统一命名（所有实验必须一致）
@@ -114,6 +115,14 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=v
 | 拉取 Harbor 镜像 | imagePullSecret `harbor-pull` |
 | mall-web 镜像 | 启动时用环境变量 `MALL_API_UPSTREAM`（默认 `mall-api:8080`）和 `NGINX_RESOLVER` 渲染 `/etc/nginx/templates/mall.conf.template`；K8s 里 `NGINX_RESOLVER` 设为集群 DNS（kubeadm 默认 `10.96.0.10`），`MALL_API_UPSTREAM` 必须写完整域名 `mall-api.<命名空间>.svc.cluster.local:8080`（nginx 的 resolver 不读 search 域）。不要另外挂载 `/etc/nginx/conf.d/default.conf` |
 | 环境命名空间 | `mall`（Lab 06 / Lab 07 开发测试环境）、`mall-staging`、`mall-prod`（Lab 08） |
+
+### 优先使用成熟开源工具
+能用社区活跃的开源项目解决的，不自己写代码；自己写的代码只用来讲原理或做选做。
+| 场景 | 主线方案 | 说明 |
+|---|---|---|
+| 告警推送到企业微信 / 钉钉 | PrometheusAlert | 国内常用的开源告警网关 |
+| 运维知识库问答 | Dify | 自写 RAG 代码保留为“原理拆解”选做 |
+| AI 告警分析 | HolmesGPT（CNCF 项目），K8sGPT 作对比 | 自写分析服务保留为“原理拆解”选做 |
 
 ## 4. 仓库目录
 ```
