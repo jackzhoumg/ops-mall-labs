@@ -93,6 +93,9 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=v
 - 流量入口：**Gateway API + Envoy Gateway**。Ingress NGINX 已于 2026 年 3 月由 Kubernetes 官方停止维护（不再修复安全漏洞），教程里要讲清这一点：很多公司的存量集群还在用 Ingress / Ingress NGINX，要能看懂和维护，但新集群用 Gateway API。替代方案对比里列出 NGINX Gateway Fabric、Higress、Traefik、Cilium 和云厂商负载均衡。
 - 入口暴露方式：裸机实验集群用 MetalLB（L2 模式）分配 `192.168.56.200-192.168.56.220`，网关拿 `192.168.56.200`；没有 MetalLB 时用 NodePort。
 - 证书：cert-manager，实验用自签 CA（`lab.local` 没法申请公网证书）。
+- 数据库位置：Lab 06 起 mall-api 跑在 K8s 里，**MySQL 和 Redis 仍然跑在 lab-db1（192.168.56.13）**。很多公司的数据库不上 K8s，这也让实验机器少一台。K8s 里在 `mall` 命名空间建无选择器的 Service `mysql`（3306）和 `redis`（6379），配 EndpointSlice 指向 192.168.56.13，应用用 `mysql.mall.svc:3306`、`redis.mall.svc:6379` 访问。
+- Kubernetes 安装路线：Lab 05 先装 **v1.35**，再在实验里升级到 **v1.36**，让学员练一次真实的集群升级。
+- Apple Silicon（M 系列）Mac：虚拟机只能跑 arm64 系统。Rocky Linux 9 有 aarch64 版本，mall-api 也能编译 arm64；但部分镜像（如 Harbor 官方镜像）只有 amd64，教程里遇到时提醒学员改用云服务器或替代方案。
 - 国内网络：`registry.k8s.io`、Docker Hub、GitHub 下载经常不通。每个用到外网镜像或下载的实验，都要写“国内网络怎么办”：kubeadm 用 `--image-repository registry.aliyuncs.com/google_containers`，软件源用阿里云 / 清华镜像，Docker Hub 镜像建议用云厂商镜像仓库或境外 / 香港按量服务器中转。
 
 ## 4. 仓库目录
