@@ -70,6 +70,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=v
 | k8s-master | 192.168.56.21 | 2C4G | Lab 05 起：控制平面 |
 | k8s-node1 | 192.168.56.22 | 2C4G | 工作节点 |
 | k8s-node2 | 192.168.56.23 | 2C4G | 工作节点 |
+| lab-eth1 / lab-eth2 | 192.168.56.31 / .32 | 4C16G + 大容量 SSD | Node-1 / Node-2（建议用云服务器） |
 
 - 操作系统：**Rocky Linux 9**（与 RHEL / CentOS 体系一致，国内企业常见）。关键命令有差异时，同时给出 Ubuntu 24.04 的写法。
 - 实验用户：`ops`，有 sudo 权限。命令提示符写法：`[ops@lab-web1 ~]$`（普通用户）和 `[root@lab-web1 ~]#`（root）。
@@ -82,7 +83,8 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=v
 | `mall.lab.local` | Lab 02-03：VIP 192.168.56.10；Lab 06 起：K8s 网关入口 |
 | `harbor.lab.local` | 192.168.56.15 |
 | `gitlab.lab.local` / `jenkins.lab.local` | 192.168.56.16 |
-| `argocd.lab.local` `grafana.lab.local` `prometheus.lab.local` `kibana.lab.local` | K8s 网关入口 |
+| `argocd.lab.local` `grafana.lab.local` `prometheus.lab.local` `alertmanager.lab.local` `kibana.lab.local` `loki.lab.local` `jaeger.lab.local` | K8s 网关入口（192.168.56.200） |
+| `mall-staging.lab.local` / `mall-prod.lab.local` | Lab 08 多环境，K8s 网关入口 |
 
 ## 3. 镜像与 K8s 约定
 - 镜像：`harbor.lab.local/mall/mall-api:<tag>`、`harbor.lab.local/mall/mall-web:<tag>`，tag 用版本号（`v1.0.0`）或 Git 短提交号，**不用 latest**。
@@ -95,8 +97,23 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=v
 - 证书：cert-manager，实验用自签 CA（`lab.local` 没法申请公网证书）。
 - 数据库位置：Lab 06 起 mall-api 跑在 K8s 里，**MySQL 和 Redis 仍然跑在 lab-db1（192.168.56.13）**。很多公司的数据库不上 K8s，这也让实验机器少一台。K8s 里在 `mall` 命名空间建无选择器的 Service `mysql`（3306）和 `redis`（6379），配 EndpointSlice 指向 192.168.56.13，应用用 `mysql.mall.svc:3306`、`redis.mall.svc:6379` 访问。
 - Kubernetes 安装路线：Lab 05 先装 **v1.35**，再在实验里升级到 **v1.36**，让学员练一次真实的集群升级。
-- Apple Silicon（M 系列）Mac：虚拟机只能跑 arm64 系统。Rocky Linux 9 有 aarch64 版本，mall-api 也能编译 arm64；但部分镜像（如 Harbor 官方镜像）只有 amd64，教程里遇到时提醒学员改用云服务器或替代方案。
+- Apple Silicon（M 系列）Mac：虚拟机只能跑 arm64 系统。Rocky Linux 9 有 aarch64 版本，mall-api 也能编译 arm64；Harbor 从 v2.16.0 起提供 arm64 离线安装包；仍有个别镜像只有 amd64，遇到时提醒学员改用云服务器或替代方案。
 - 国内网络：`registry.k8s.io`、Docker Hub、GitHub 下载经常不通。每个用到外网镜像或下载的实验，都要写“国内网络怎么办”：kubeadm 用 `--image-repository registry.aliyuncs.com/google_containers`，软件源用阿里云 / 清华镜像，Docker Hub 镜像建议用云厂商镜像仓库或境外 / 香港按量服务器中转。
+
+### K8s 资源统一命名（所有实验必须一致）
+| 资源 | 名称 |
+|---|---|
+| GatewayClass | `eg`（Envoy Gateway） |
+| Gateway | `lab-gateway`，命名空间 `envoy-gateway-system`，所有实验共用一个；监听器 `http`（80）和 `https`（443，主机名 `*.lab.local`），`allowedRoutes.namespaces.from: All` |
+| 网关 TLS 证书 | Secret `lab-wildcard-tls`（命名空间 `envoy-gateway-system`），由 cert-manager ClusterIssuer `lab-ca-issuer` 签发 |
+| HTTPRoute | 各命名空间自己建，`parentRefs` 指向 `envoy-gateway-system/lab-gateway` |
+| Deployment / 容器 / Service | `mall-api`（Service 端口 8080，端口名 `http`）、`mall-web`（Service 端口 80，端口名 `http`） |
+| 标签 | `app.kubernetes.io/name: mall-api` / `mall-web`，`app.kubernetes.io/part-of: ops-mall` |
+| ConfigMap / Secret | `mall-api-config`（非敏感环境变量）、`mall-api-secret`（键 `MALL_DB_DSN`、`MALL_REDIS_PASSWORD`） |
+| 数据库 | 无选择器 Service `mysql`（3306）、`redis`（6379）；EndpointSlice `mysql-external`、`redis-external`，标签 `kubernetes.io/service-name` 指向对应 Service，地址 192.168.56.13 |
+| 拉取 Harbor 镜像 | imagePullSecret `harbor-pull` |
+| mall-web 镜像 | 启动时用环境变量 `MALL_API_UPSTREAM`（默认 `mall-api:8080`）和 `NGINX_RESOLVER` 渲染 `/etc/nginx/templates/mall.conf.template`；K8s 里 `NGINX_RESOLVER` 设为集群 DNS（kubeadm 默认 `10.96.0.10`）。不要另外挂载 `/etc/nginx/conf.d/default.conf` |
+| 环境命名空间 | `mall`（Lab 06 / Lab 07 开发测试环境）、`mall-staging`、`mall-prod`（Lab 08） |
 
 ## 4. 仓库目录
 ```
@@ -139,6 +156,7 @@ labs/
   11. `## 10. 简历写法`
 - 语气：师傅带徒弟，讲人话，先做后讲原理。“为什么这么做”写在步骤旁边，一两句话。
 - 每个命令代码块标明在哪台机器执行；给出关键的预期输出。
+- Shell 脚本里变量后面紧跟中文时一律写成 `${var}`（`$var中文` 在部分 bash 版本下会把中文字节当成变量名，`set -u` 时直接报错）。
 - 版本号、下载地址、仓库地址必须查过官方文档再写，写成“写作时版本”，并提醒以官方最新文档为准。
 - 不出现任何真实公司名、客户名。案例写“某电商公司”“某资讯平台”。
 - Web3 相关只讲技术：测试网、不谈币价和投资、不推荐交易所。
