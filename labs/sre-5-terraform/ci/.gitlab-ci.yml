@@ -1,0 +1,96 @@
+# Terraform 变更流水线（GitLab CI，对应 Lab 07 的 GitLab）
+# 规则：
+#   - 合并请求（MR）：fmt / validate / 安全扫描 / plan，plan 结果作为制品，评审人看了 plan 再批准合并
+#   - 合并到 main：重新 plan，apply 需要手动点按钮（保护分支 + 指定人员）
+#   - 任何人不在自己电脑上对 dev 以外的环境执行 apply
+#
+# 需要在 GitLab 项目 Settings > CI/CD > Variables 里配置（勾选 Masked + Protected）：
+#   ALIBABA_CLOUD_ACCESS_KEY_ID / ALIBABA_CLOUD_ACCESS_KEY_SECRET   CI 专用 RAM 用户的 AccessKey
+#   TF_BACKEND_BUCKET / TF_BACKEND_OTS_ENDPOINT                      bootstrap-state 的输出
+#   TF_VAR_admin_cidr                                                 管理员来源 IP
+#   SSH_PUBLIC_KEY                                                    类型选 File，内容是公钥
+
+variables:
+  TF_ROOT: alicloud/envs/${TF_ENV}
+  TF_ENV: dev
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "false"
+
+default:
+  # 写作时 Terraform 最新版 1.17.2；国内拉不到 Docker Hub 时换成 Harbor 里的副本
+  image:
+    name: harbor.lab.local/library/terraform:1.17.2
+    entrypoint: [""]
+  before_script:
+    - cd "${TF_ROOT}"
+    - cp backend.tf.example backend.tf
+    - >-
+      terraform init
+      -backend-config="bucket=${TF_BACKEND_BUCKET}"
+      -backend-config="prefix=ops-mall"
+      -backend-config="key=${TF_ENV}/terraform.tfstate"
+      -backend-config="region=cn-hangzhou"
+      -backend-config="encrypt=true"
+      -backend-config="tablestore_endpoint=${TF_BACKEND_OTS_ENDPOINT}"
+      -backend-config="tablestore_table=tf_state_lock"
+
+stages:
+  - validate
+  - plan
+  - apply
+
+fmt-validate:
+  stage: validate
+  before_script: []
+  script:
+    - terraform fmt -check -recursive alicloud
+    - cd "${TF_ROOT}" && terraform init -backend=false && terraform validate
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+# 用 Trivy 扫 Terraform 代码里的不安全配置（例如安全组对 0.0.0.0/0 开放 22 端口）。SRE-6 会细讲 Trivy
+iac-scan:
+  stage: validate
+  image:
+    name: harbor.lab.local/library/trivy:0.76.2
+    entrypoint: [""]
+  before_script: []
+  script:
+    - trivy config --severity HIGH,CRITICAL --exit-code 1 alicloud
+  allow_failure: true
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+plan:
+  stage: plan
+  script:
+    - terraform plan -var "ssh_public_key_path=${SSH_PUBLIC_KEY}" -out=tfplan
+    - terraform show -no-color tfplan > plan.txt
+    # 把“增 / 改 / 删”数量打印在日志最后，评审人一眼能看到有没有 destroy
+    - grep -E "^Plan:|No changes" plan.txt || true
+  artifacts:
+    name: "plan-${TF_ENV}-${CI_COMMIT_SHORT_SHA}"
+    paths:
+      - ${TF_ROOT}/tfplan
+      - ${TF_ROOT}/plan.txt
+    expire_in: 7 days
+  resource_group: terraform-${TF_ENV}
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+
+apply:
+  stage: apply
+  script:
+    # 只应用本流水线 plan 阶段生成的 tfplan：评审看到的就是执行的
+    - terraform apply tfplan
+  needs:
+    - plan
+  # resource_group 保证同一环境同一时间只有一个 apply 在跑（state 锁之外的第二道保险）
+  resource_group: terraform-${TF_ENV}
+  environment:
+    name: ${TF_ENV}
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: manual

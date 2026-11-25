@@ -1,0 +1,26 @@
+# 复盘改进项 AI-1（长期方案）：就绪探针仍查 /readyz，但改为“连续失败 3 次（30 秒）才摘流量”，并放宽单次超时，
+# 能扛住几十秒以内的依赖抖动。依赖长时间故障时怎么办，见改进项 AI-5（熔断降级），不靠探针解决。
+# 背景：/readyz 会 Ping MySQL（应用内超时 2 秒）。原探针 periodSeconds=5、timeoutSeconds=1、failureThreshold=1 时，
+# 数据库网络抖动几秒，所有 mall-api Pod 会同时被摘掉，整个商城 503。
+# 用法：kubectl -n mall patch deployment mall-api --patch-file k8s/mall-api-probe-patch.yaml
+# 前提：容器名是 mall-api（kubectl -n mall get deploy mall-api -o jsonpath='{.spec.template.spec.containers[*].name}'）
+spec:
+  template:
+    spec:
+      containers:
+        - name: mall-api
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 1
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3

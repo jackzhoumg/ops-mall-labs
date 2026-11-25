@@ -1,0 +1,20 @@
+common_packages:
+  - chrony
+  - cronie
+  - firewalld
+  - vim-enhanced
+  - curl
+  - tar
+  - rsync
+  - lsof
+  - sysstat
+  - openssl
+  - bash-completion
+  # Ansible 操作 SELinux 布尔值、firewalld 需要的 Python 库
+  - python3-libselinux
+  - python3-libsemanage
+  - python3-firewall
+
+common_sysctl:
+  net.core.somaxconn: 1024
+  vm.swappiness: 10

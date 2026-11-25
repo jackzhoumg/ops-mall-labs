@@ -1,0 +1,36 @@
+# 生产环境：手动同步。Git 变了 ArgoCD 只显示 OutOfSync，由值班的人确认后点 Sync
+# kubectl apply -f labs/lab08-gitops/argocd/app-prod.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ops-mall-prod
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+  # 不加 resources-finalizer：误删 Application 时，生产的 Pod 不会跟着被删
+spec:
+  project: ops-mall
+  source:
+    repoURL: http://gitlab.lab.local/ops/ops-mall-labs.git
+    targetRevision: main
+    path: labs/lab08-gitops/charts/ops-mall
+    helm:
+      releaseName: ops-mall
+      valueFiles:
+        - values-prod.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mall-prod
+  # 用 Gateway API 插件做金丝雀时，插件会改 HTTPRoute 的权重，ArgoCD 不要把它当成漂移
+  ignoreDifferences:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      name: mall-api
+      jqPathExpressions:
+        - .spec.rules[].backendRefs[].weight
+  syncPolicy:
+    # 没有 automated：手动同步
+    syncOptions:
+      - PrunePropagationPolicy=foreground
+      - RespectIgnoreDifferences=true
+  revisionHistoryLimit: 10

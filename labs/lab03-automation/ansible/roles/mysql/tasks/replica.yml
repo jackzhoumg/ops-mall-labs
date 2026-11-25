@@ -1,0 +1,44 @@
+- name: 查看复制状态
+  ansible.mysql.mysql_query:
+    query: SHOW REPLICA STATUS
+    login_unix_socket: "{{ mysql_socket }}"
+  register: replica_status
+  changed_when: false
+
+# 只在还没配置过复制时执行，重复跑 playbook 不会重置复制（幂等）
+- name: 首次配置复制
+  when: replica_status.query_result[0] | length == 0
+  block:
+    - name: 指向主库（GTID 自动定位）
+      ansible.mysql.mysql_query:
+        # MySQL 8.4 已删除 CHANGE MASTER TO，只能用新语法
+        # GET_SOURCE_PUBLIC_KEY=1：复制账号用默认的 caching_sha2_password 插件、又没开 TLS 时必须加，否则 IO 线程连不上
+        query: >-
+          CHANGE REPLICATION SOURCE TO
+          SOURCE_HOST=%s, SOURCE_PORT=%s, SOURCE_USER=%s, SOURCE_PASSWORD=%s,
+          SOURCE_AUTO_POSITION=1, GET_SOURCE_PUBLIC_KEY=1
+        positional_args:
+          - "{{ mysql_primary_host }}"
+          - "{{ mysql_port }}"
+          - "{{ mysql_repl_user }}"
+          - "{{ mysql_repl_password }}"
+        login_unix_socket: "{{ mysql_socket }}"
+      no_log: true
+
+    - name: 启动复制
+      ansible.mysql.mysql_query:
+        query: START REPLICA
+        login_unix_socket: "{{ mysql_socket }}"
+
+- name: 等待复制线程正常
+  ansible.mysql.mysql_query:
+    query: SHOW REPLICA STATUS
+    login_unix_socket: "{{ mysql_socket }}"
+  register: replica_check
+  changed_when: false
+  retries: 10
+  delay: 3
+  until:
+    - replica_check.query_result[0] | length > 0
+    - replica_check.query_result[0][0]['Replica_IO_Running'] == 'Yes'
+    - replica_check.query_result[0][0]['Replica_SQL_Running'] == 'Yes'

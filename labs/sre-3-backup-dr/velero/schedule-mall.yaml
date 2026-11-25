@@ -1,0 +1,42 @@
+# Velero 定时备份。
+# 用法（k8s-master）：kubectl apply -f velero/schedule-mall.yaml
+# 查看：velero schedule get；velero backup get
+---
+# mall 命名空间每天 03:00 备份一次，保留 7 天。
+# mall 里没有 PVC（MySQL / Redis 在 lab-db1 上），备份的是 Deployment、Service、ConfigMap、Secret、
+# HTTPRoute、EndpointSlice 等资源对象。数据库由 mysql/ 下的脚本单独备份。
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: mall-daily
+  namespace: velero
+spec:
+  schedule: "0 3 * * *"
+  useOwnerReferencesInBackup: false
+  template:
+    includedNamespaces:
+      - mall
+    snapshotVolumes: false
+    ttl: 168h0m0s
+    storageLocation: default
+---
+# 整个集群每周日 04:00 备份一次（不含 kube-system 和 velero 自己），保留 30 天。
+# 集群级资源（CRD、ClusterRole、StorageClass 等）也会一起备份。
+apiVersion: velero.io/v1
+kind: Schedule
+metadata:
+  name: cluster-weekly
+  namespace: velero
+spec:
+  schedule: "0 4 * * 0"
+  useOwnerReferencesInBackup: false
+  template:
+    includedNamespaces:
+      - "*"
+    excludedNamespaces:
+      - kube-system
+      - velero
+    includeClusterResources: true
+    snapshotVolumes: false
+    ttl: 720h0m0s
+    storageLocation: default

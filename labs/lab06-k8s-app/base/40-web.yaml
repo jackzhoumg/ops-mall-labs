@@ -1,0 +1,95 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mall-web
+  namespace: mall
+  labels:
+    app.kubernetes.io/name: mall-web
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mall-web
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mall-web
+        app.kubernetes.io/part-of: ops-mall
+    spec:
+      imagePullSecrets:
+        - name: harbor-pull
+      terminationGracePeriodSeconds: 30
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: mall-web
+      containers:
+        - name: mall-web
+          image: harbor.lab.local/mall/mall-web:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 80
+              protocol: TCP
+          # 镜像启动时用这两个变量渲染 /etc/nginx/templates/mall.conf.template，不要另外挂载 default.conf
+          env:
+            # nginx 的 resolver 不读 resolv.conf 的 search 域，必须写完整域名，写 mall-api:8080 会解析失败
+            - name: MALL_API_UPSTREAM
+              value: "mall-api.mall.svc.cluster.local:8080"
+            # 集群 DNS（CoreDNS）的 Service IP，kubeadm 默认 serviceSubnet 10.96.0.0/12 时是 10.96.0.10
+            - name: NGINX_RESOLVER
+              value: "10.96.0.10"
+          resources:
+            requests:
+              cpu: 20m
+              memory: 32Mi
+            limits:
+              cpu: 200m
+              memory: 128Mi
+          readinessProbe:
+            httpGet:
+              path: /nginx-health
+              port: http
+            periodSeconds: 5
+            failureThreshold: 3
+          livenessProbe:
+            httpGet:
+              path: /nginx-health
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 10
+            failureThreshold: 3
+          lifecycle:
+            preStop:
+              sleep:
+                seconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mall-web
+  namespace: mall
+  labels:
+    app.kubernetes.io/name: mall-web
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: mall-web
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP

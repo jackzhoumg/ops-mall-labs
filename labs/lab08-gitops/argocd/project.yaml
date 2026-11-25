@@ -1,0 +1,21 @@
+# ArgoCD 项目：限制 ops-mall 的应用只能从这个仓库拉配置、只能部署到两个命名空间
+# kubectl apply -f labs/lab08-gitops/argocd/project.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: AppProject
+metadata:
+  name: ops-mall
+  namespace: argocd
+spec:
+  description: ops-mall 商城（预发 + 生产）
+  sourceRepos:
+    - http://gitlab.lab.local/ops/ops-mall-labs.git
+  destinations:
+    - server: https://kubernetes.default.svc
+      namespace: mall-staging
+    - server: https://kubernetes.default.svc
+      namespace: mall-prod
+  # 不允许创建任何集群级资源（Namespace、ClusterRole 等），命名空间由管理员提前建好
+  clusterResourceWhitelist: []
+  namespaceResourceWhitelist:
+    - group: "*"
+      kind: "*"

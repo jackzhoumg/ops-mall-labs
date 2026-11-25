@@ -1,0 +1,11 @@
+[Unit]
+Description=Run mall MySQL full backup daily at 02:00
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+# 关机错过了时间，开机后补跑一次
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

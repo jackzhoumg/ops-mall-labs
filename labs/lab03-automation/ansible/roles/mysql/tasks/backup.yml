@@ -1,0 +1,35 @@
+- name: 备份账号配置文件
+  ansible.builtin.template:
+    src: mysql-backup.cnf.j2
+    dest: /etc/ops/mysql-backup.cnf
+    owner: root
+    group: root
+    mode: "0600"
+  diff: false
+
+- name: 部署备份脚本
+  ansible.builtin.copy:
+    src: "{{ scripts_src }}/mysql_backup.sh"
+    dest: /usr/local/bin/mysql_backup.sh
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: 备份目录
+  ansible.builtin.file:
+    path: "{{ mysql_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: 每天定时备份
+  ansible.builtin.cron:
+    name: mysql backup
+    cron_file: mysql-backup
+    user: root
+    hour: "{{ mysql_backup_cron_hour }}"
+    minute: "{{ mysql_backup_cron_minute }}"
+    job: >-
+      BACKUP_DIR={{ mysql_backup_dir }} RETENTION_DAYS={{ mysql_backup_retention_days }}
+      /usr/local/bin/mysql_backup.sh >/dev/null 2>&1

@@ -1,0 +1,36 @@
+# {{ ansible_managed }}
+# 由 Ansible mysql 角色生成，手工修改会在下次执行 playbook 时被覆盖
+
+[mysqld]
+datadir={{ mysql_datadir }}
+socket={{ mysql_socket }}
+log-error=/var/log/mysqld.log
+pid-file=/var/run/mysqld/mysqld.pid
+
+bind-address={{ mysql_bind_address }}
+port={{ mysql_port }}
+# 不做 DNS 反查，避免 DNS 慢导致连接卡住；授权里只能用 IP
+skip-name-resolve
+max_connections={{ mysql_max_connections }}
+character-set-server=utf8mb4
+collation-server=utf8mb4_0900_ai_ci
+
+innodb_buffer_pool_size={{ mysql_innodb_buffer_pool_size }}
+
+# ---- 复制 ----
+server-id={{ mysql_server_id }}
+log-bin=mysql-bin
+binlog_expire_logs_seconds={{ mysql_binlog_expire_seconds }}
+gtid_mode=ON
+enforce_gtid_consistency=ON
+{% if mysql_role == 'replica' %}
+relay-log=relay-bin
+# 从库只读，防止有人误写；root 等有 SUPER 权限的账号不受 read_only 限制
+read_only=ON
+{% endif %}
+
+# ---- 慢查询 ----
+slow_query_log=ON
+# 放在数据目录里：mysql 用户有写权限，SELinux 标签也对
+slow_query_log_file={{ mysql_datadir }}/slow.log
+long_query_time={{ mysql_slow_query_seconds }}

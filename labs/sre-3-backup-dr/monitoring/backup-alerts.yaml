@@ -1,0 +1,65 @@
+# 备份本身也要监控：“备份一直在失败，但没人知道”是最常见的容灾事故。
+# 用法（k8s-master）：kubectl apply -f monitoring/backup-alerts.yaml
+#
+# 指标来源：
+#   mall_mysql_backup_*：lab-db1 上备份脚本写到 node_exporter textfile 目录（需要 monitoring/node-exporter-textfile.conf）
+#   velero_backup_*：Velero 服务端 :8085/metrics（需要 monitoring/velero-podmonitor.yaml）
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: backup-dr
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  groups:
+    - name: backup-dr.alerts
+      rules:
+        - alert: MysqlFullBackupTooOld
+          expr: time() - mall_mysql_backup_last_success_timestamp_seconds{type="full"} > 26 * 3600
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} 的 MySQL 全备超过 26 小时没有成功"
+            description: "上次成功是 {{ $value | humanizeDuration }} 之前。查看：journalctl -u mall-mysql-full-backup -n 50"
+        - alert: MysqlFullBackupFailed
+          expr: mall_mysql_backup_last_status{type="full"} == 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} 最近一次 MySQL 全备失败"
+            description: "查看：journalctl -u mall-mysql-full-backup -n 50"
+        # binlog 上传断了 = RPO 在变大，主库这时候坏了，丢的数据就是从上次上传到现在的全部写入
+        - alert: MysqlBinlogUploadStale
+          expr: time() - mall_mysql_backup_last_success_timestamp_seconds{type="binlog"} > 15 * 60
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} 的 binlog 超过 15 分钟没有上传到 MinIO"
+            description: "目标 RPO 是 5 分钟，当前已经 {{ $value | humanizeDuration }}。查看：journalctl -u mall-mysql-binlog-upload -n 50"
+        # 指标整个没了：脚本没装、定时器没启用、textfile 目录配置错了
+        - alert: MysqlBackupMetricsMissing
+          expr: absent(mall_mysql_backup_last_success_timestamp_seconds{type="full"})
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "没有收到 MySQL 备份指标"
+            description: "检查 lab-db1 上的备份定时器和 node_exporter 的 --collector.textfile.directory 参数"
+        - alert: VeleroBackupTooOld
+          expr: time() - velero_backup_last_successful_timestamp{schedule="mall-daily"} > 26 * 3600
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "Velero 定时备份 mall-daily 超过 26 小时没有成功"
+            description: "查看：velero schedule get；velero backup get；velero backup logs <名字>"
+        - alert: VeleroBackupFailed
+          expr: increase(velero_backup_failure_total[1h]) > 0
+          labels:
+            severity: warning
+          annotations:
+            summary: "Velero 最近 1 小时有备份失败"
+            description: "查看：velero backup get，状态是 Failed / PartiallyFailed 的用 velero backup describe <名字> --details 看原因"

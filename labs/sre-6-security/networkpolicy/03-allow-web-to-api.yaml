@@ -1,0 +1,41 @@
+# 第 3 条：mall-web（Nginx 把 /api/ 反向代理到 mall-api）访问 mall-api 8080。
+# 入站和出站要各开一边：默认拒绝同时作用在 mall-web 的出站和 mall-api 的入站上。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-web-egress-to-api
+  namespace: mall
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mall-web
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mall-api
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-ingress-from-web
+  namespace: mall
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mall-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: mall-web
+      ports:
+        - protocol: TCP
+          port: 8080

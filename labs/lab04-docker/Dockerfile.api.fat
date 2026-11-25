@@ -1,0 +1,15 @@
+# 反面教材：单阶段构建，用来和 Dockerfile.api 对比镜像大小。不要用于生产。
+#
+#   docker build -f labs/lab04-docker/Dockerfile.api.fat -t mall-api:fat .
+#   docker images | grep mall-api
+#
+# 问题：
+#   1. 整个 Go 编译工具链、源码、依赖缓存都在镜像里，体积大几十倍
+#   2. 以 root 运行
+#   3. 代码改一行，go mod download 也要重新跑（没利用分层缓存）
+FROM golang:1.26
+WORKDIR /src
+COPY app/ ./
+RUN GOPROXY=https://goproxy.cn,direct go build -o /usr/local/bin/mall-api .
+EXPOSE 8080
+CMD ["mall-api"]

@@ -1,0 +1,28 @@
+# 用 Gateway API 暴露 Jaeger 界面：jaeger.lab.local
+# 前提和 Lab 09 的 httproutes.yaml 一样：共享 Gateway 叫 lab-gateway、在 envoy-gateway-system，
+# HTTP 监听器允许所有命名空间挂路由。名字不一样就改 parentRefs。
+# 学员电脑 hosts 里加：192.168.56.200  jaeger.lab.local
+#
+# 注意：Jaeger 界面没有登录认证，链路里可能有 URL 参数、用户 ID 等敏感信息。
+# 实验网段可以这样用；生产环境要在网关上加认证（Envoy Gateway SecurityPolicy），或者只在内网访问。
+#
+# 用法（k8s-master）：kubectl apply -f tracing/httproute-jaeger.yaml
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: jaeger
+  namespace: monitoring
+spec:
+  parentRefs:
+    - name: lab-gateway
+      namespace: envoy-gateway-system
+  hostnames:
+    - jaeger.lab.local
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: jaeger
+          port: 16686

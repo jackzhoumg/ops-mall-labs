@@ -1,0 +1,96 @@
+# AIOps-2：alert-analyzer 部署（monitoring 命名空间）
+# 只能 1 个副本：冷却状态在内存里、分析记录在本地 SQLite。要多副本得把这两样搬到 Redis / 数据库。
+# 发布策略用 Recreate：避免新旧两个 Pod 同时收告警、同时写一个 SQLite 文件。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: alert-analyzer
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alert-analyzer
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alert-analyzer
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: alert-analyzer
+        app.kubernetes.io/part-of: ops-mall
+    spec:
+      serviceAccountName: alert-analyzer
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: alert-analyzer
+          image: harbor.lab.local/ops/alert-analyzer:v1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: alert-analyzer-config
+            - secretRef:
+                name: alert-analyzer-secret
+                # Secret 不存在时也能启动：不调大模型、不发群，只打印日志（演练模式）
+                optional: true
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+            periodSeconds: 20
+            timeoutSeconds: 3
+          resources:
+            requests:
+              cpu: 20m
+              memory: 64Mi
+            limits:
+              memory: 256Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        # 实验用 emptyDir：Pod 重建后分析记录和反馈会丢。要长期做效果评估，
+        # 改用 pvc.example.yaml 里的 PVC（集群里要有 StorageClass）
+        - name: data
+          emptyDir: {}
+        - name: tmp
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: alert-analyzer
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alert-analyzer
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  selector:
+    app.kubernetes.io/name: alert-analyzer
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

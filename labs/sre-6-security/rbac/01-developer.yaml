@@ -1,0 +1,49 @@
+# 开发人员：在 mall 命名空间能看、能查日志、能端口转发调试、能重启应用；
+# 不能看 Secret、不能 exec 进容器、不能删资源、不能改 RBAC。
+# 绑定到用户组 mall-dev（证书里的 O=mall-dev），新人入职只要签一张带这个组的证书，不用改 RBAC。
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: mall-developer
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints", "configmaps", "events", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets", "statefulsets"]
+    verbs: ["get", "list", "watch"]
+  # kubectl rollout restart 本质是 patch deployment 的注解
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["patch"]
+  - apiGroups: ["batch"]
+    resources: ["jobs", "cronjobs"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["httproutes", "gateways"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: mall-developer
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: mall-developer
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: mall-dev

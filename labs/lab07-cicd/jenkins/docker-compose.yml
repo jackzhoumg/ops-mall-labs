@@ -1,0 +1,29 @@
+# Jenkins（Lab 07），在 lab-ci（192.168.56.16）上运行
+# 首次启动前：
+#   sudo mkdir -p /var/jenkins_home && sudo chown -R 1000:1000 /var/jenkins_home
+#   echo "DOCKER_GID=$(getent group docker | cut -d: -f3)" > .env
+#   sudo docker compose up -d --build
+services:
+  jenkins:
+    build: .
+    image: lab-ci/jenkins:2.580.2-lts-jdk21
+    container_name: jenkins
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+      # 控制器 JVM 内存，8G 机器和 GitLab 同跑时给 1G
+      JAVA_OPTS: "-Xms512m -Xmx1g -Duser.timezone=Asia/Shanghai"
+    # 让容器里的 jenkins 用户能访问宿主机 docker.sock
+    group_add:
+      - "${DOCKER_GID:-994}"
+    extra_hosts:
+      - "gitlab.lab.local:192.168.56.16"
+      - "harbor.lab.local:192.168.56.15"
+    ports:
+      - "8080:8080"
+    volumes:
+      # 宿主机路径和容器内路径必须一致：流水线里 docker run -v $WORKSPACE:... 时，
+      # 路径是交给宿主机 Docker 解析的，不一致就会挂载到空目录
+      - /var/jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    mem_limit: 1536m

@@ -1,0 +1,50 @@
+# AIOps-2：在 Lab 09 的 Alertmanager 配置上加一条"抄送给 AI 分析"的路由。
+#
+# 用法：把下面 routes 里标了【新增】的那一条，插到 labs/lab09-monitoring/values/alertmanager-values.yaml
+# 的 routes 列表里，位置在 Watchdog 那条 "null" 路由之后、oncall-p1 之前；receivers 里加上 ai-analyzer。
+# 然后和 Lab 09 一样 helm upgrade：
+#   helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack -n monitoring \
+#     --version <Lab 09 用的版本> \
+#     -f labs/lab09-monitoring/values/kube-prometheus-stack-values.yaml \
+#     -f labs/lab09-monitoring/values/alertmanager-values.yaml
+#
+# 为什么用 continue: true：AI 分析是"附加"的，原来的告警通知（alert-bridge → 群）照常发。
+# 分析服务挂了、大模型挂了，都不影响原始告警送达。
+#
+# 下面是合并后 route 部分的样子（只列出和 Lab 09 不同的地方）：
+alertmanager:
+  config:
+    route:
+      receiver: ops-wecom
+      group_by: ["alertname", "namespace", "severity"]
+      group_wait: 30s
+      group_interval: 5m
+      repeat_interval: 4h
+      routes:
+        - receiver: "null"
+          matchers:
+            - alertname =~ "Watchdog|InfoInhibitor"
+        # 【新增】critical / warning 告警抄送一份给 alert-analyzer，然后继续往下匹配原来的路由
+        - receiver: ai-analyzer
+          matchers:
+            - severity =~ "critical|warning"
+            # 分析服务自己的告警不要再发给自己分析
+            - alertname !~ "AlertAnalyzer.+"
+          continue: true
+          # 分析要采集 15 分钟数据，group_wait 稍长一点，让同组告警先攒齐
+          group_wait: 45s
+          group_interval: 10m
+          # 重复提醒不需要重新分析（服务端还有 30 分钟冷却兜底）
+          repeat_interval: 12h
+        # ↓ 下面保持 Lab 09 原样：oncall-p1、ops-wecom（warning）、ops-wecom（info）……
+    receivers:
+      # 【新增】
+      - name: ai-analyzer
+        webhook_configs:
+          - url: http://alert-analyzer.monitoring.svc:8080/alertmanager
+            # 恢复通知也发过去：服务端据此清掉冷却，下次再触发会重新分析（恢复消息本身不推送）
+            send_resolved: true
+            max_alerts: 20
+            # 分析服务立即返回 200，10 秒足够；超时 Alertmanager 会重试
+            timeout: 10s
+      # ↓ 下面保持 Lab 09 原样："null"、ops-wecom、oncall-p1

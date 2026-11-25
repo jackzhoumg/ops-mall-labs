@@ -1,0 +1,54 @@
+# 只读运维（值班、二线支持）：全集群能看，包括节点、命名空间、存储、CRD 资源；不能改任何东西，不能看 Secret。
+# 做法：复用内置 ClusterRole view（已经排除了 Secret），再补一个 ClusterRole 加上 view 没有的集群级资源。
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ops-readonly-cluster
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "namespaces", "persistentvolumes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["storage.k8s.io"]
+    resources: ["storageclasses"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+  - apiGroups: ["gateway.networking.k8s.io"]
+    resources: ["gatewayclasses", "gateways", "httproutes"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+    verbs: ["get", "list", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ops-readonly-view
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: view
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: ops-readonly
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ops-readonly-cluster
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: ops-readonly-cluster
+subjects:
+  - apiGroup: rbac.authorization.k8s.io
+    kind: Group
+    name: ops-readonly

@@ -1,0 +1,25 @@
+# 实验 5：给 1 个 mall-api 容器额外占用内存，持续 3 分钟
+# 稳态假设：超过 memory limit 时容器被 OOMKilled 并自动重启，另一个副本继续服务，告警 KubePodCrashLooping / OOM 能触发。
+# size 按你的 memory limit 调：比 limit 小一点看“内存高”，比 limit 大一点看 OOMKilled。
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: mall-api-stress-memory
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+    chaos.lab/drill: "sre-4"
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - mall
+    labelSelectors:
+      app.kubernetes.io/name: mall-api
+  containerNames:
+    - mall-api
+  stressors:
+    memory:
+      workers: 1
+      size: "200MB"
+  duration: "3m"

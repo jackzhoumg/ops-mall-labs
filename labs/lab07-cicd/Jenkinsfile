@@ -1,0 +1,147 @@
+// ops-mall Jenkins 声明式流水线（Lab 07），与 .gitlab-ci.yml 做同样的事：
+//   Test -> Build -> Scan -> Push -> Deploy
+// 用法：Jenkins 新建“多分支流水线”，Script Path 填 labs/lab07-cicd/Jenkinsfile
+//
+// 需要的凭据（Manage Jenkins > Credentials，ID 必须一致）：
+//   gitlab-pull      Username with password：GitLab 账号 + Access Token（read_repository），拉代码用
+//   harbor-robot     Username with password：Harbor 机器人账号
+//   kubeconfig-mall  Secret file：labs/lab07-cicd/k8s/make-kubeconfig.sh 生成的 kubeconfig
+//
+// 要求：Jenkins 容器能用宿主机 docker.sock，/var/jenkins_home 宿主机与容器内路径一致
+
+pipeline {
+    agent any
+
+    options {
+        timestamps()
+        timeout(time: 30, unit: 'MINUTES')
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+        // 同一分支不并发构建，避免两次发布交叉
+        disableConcurrentBuilds()
+    }
+
+    environment {
+        REGISTRY       = 'harbor.lab.local'
+        API_IMAGE      = "${REGISTRY}/mall/mall-api"
+        WEB_IMAGE      = "${REGISTRY}/mall/mall-web"
+        GO_IMAGE       = 'golang:1.26'
+        TRIVY_IMAGE    = 'aquasec/trivy:0.76.2'
+        CI_TOOLS_IMAGE = 'harbor.lab.local/library/ci-tools:v1.0.0'
+        K8S_NAMESPACE  = 'mall'
+        GOPROXY        = 'https://goproxy.cn,direct'
+    }
+
+    stages {
+        stage('Prepare') {
+            steps {
+                script {
+                    // 制品版本号：标签构建用标签名（v1.2.0），否则用 8 位短提交号
+                    def shortSha = sh(script: 'git rev-parse --short=8 HEAD', returnStdout: true).trim()
+                    env.IMAGE_TAG = env.TAG_NAME ?: shortSha
+                    currentBuild.displayName = "#${env.BUILD_NUMBER} ${env.IMAGE_TAG}"
+                }
+                sh 'echo "branch=${BRANCH_NAME} tag=${IMAGE_TAG}"'
+            }
+        }
+
+        stage('Test') {
+            agent {
+                docker {
+                    image "${GO_IMAGE}"
+                    // 复用外层的工作空间，不再重新拉代码
+                    reuseNode true
+                }
+            }
+            environment {
+                // docker.inside 以 jenkins 用户（uid 1000）运行，默认缓存目录没有写权限
+                GOMODCACHE = "${WORKSPACE}/.cache/go-mod"
+                GOCACHE    = "${WORKSPACE}/.cache/go-build"
+            }
+            steps {
+                dir('app') {
+                    sh 'go version'
+                    sh 'go vet ./...'
+                    sh 'go test -count=1 ./...'
+                }
+            }
+        }
+
+        stage('Build') {
+            when { anyOf { branch 'main'; buildingTag() } }
+            steps {
+                sh '''
+                  docker build -f labs/lab04-docker/Dockerfile.api --build-arg VERSION="$IMAGE_TAG" -t "$API_IMAGE:$IMAGE_TAG" .
+                  docker build -f labs/lab04-docker/Dockerfile.web -t "$WEB_IMAGE:$IMAGE_TAG" .
+                '''
+            }
+        }
+
+        stage('Scan') {
+            when { anyOf { branch 'main'; buildingTag() } }
+            steps {
+                // trivy-cache 是命名卷，漏洞库只在第一次下载
+                sh '''
+                  for img in "$API_IMAGE:$IMAGE_TAG" "$WEB_IMAGE:$IMAGE_TAG"; do
+                    docker run --rm \
+                      -v /var/run/docker.sock:/var/run/docker.sock \
+                      -v trivy-cache:/root/.cache/ \
+                      "$TRIVY_IMAGE" image --exit-code 1 --severity HIGH,CRITICAL \
+                      --ignore-unfixed --no-progress "$img"
+                  done
+                '''
+            }
+        }
+
+        stage('Push') {
+            when { anyOf { branch 'main'; buildingTag() } }
+            steps {
+                withCredentials([usernamePassword(credentialsId: 'harbor-robot',
+                                                  usernameVariable: 'HARBOR_USER',
+                                                  passwordVariable: 'HARBOR_PASSWORD')]) {
+                    // 单引号：让 shell 展开变量，Groovy 不碰密码，日志里也不会出现明文
+                    sh '''
+                      echo "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u "$HARBOR_USER" --password-stdin
+                      docker push "$API_IMAGE:$IMAGE_TAG"
+                      docker push "$WEB_IMAGE:$IMAGE_TAG"
+                      docker logout "$REGISTRY"
+                    '''
+                }
+            }
+        }
+
+        stage('Deploy') {
+            when { anyOf { branch 'main'; buildingTag() } }
+            steps {
+                withCredentials([file(credentialsId: 'kubeconfig-mall', variable: 'KUBECONFIG_FILE')]) {
+                    sh '''
+                      docker run --rm \
+                        -v "$KUBECONFIG_FILE":/kube/config:ro \
+                        -e KUBECONFIG=/kube/config \
+                        -e K8S_NAMESPACE -e API_IMAGE -e WEB_IMAGE -e IMAGE_TAG -e BUILD_NUMBER \
+                        "$CI_TOOLS_IMAGE" bash -euc '
+                          kubectl -n "$K8S_NAMESPACE" set image deployment/mall-api mall-api="$API_IMAGE:$IMAGE_TAG"
+                          kubectl -n "$K8S_NAMESPACE" set image deployment/mall-web mall-web="$WEB_IMAGE:$IMAGE_TAG"
+                          kubectl -n "$K8S_NAMESPACE" annotate deployment/mall-api kubernetes.io/change-cause="jenkins build $BUILD_NUMBER $IMAGE_TAG" --overwrite
+                          kubectl -n "$K8S_NAMESPACE" rollout status deployment/mall-api --timeout=180s
+                          kubectl -n "$K8S_NAMESPACE" rollout status deployment/mall-web --timeout=120s
+                        '
+                    '''
+                }
+            }
+        }
+    }
+
+    post {
+        success {
+            echo "发布成功：${env.API_IMAGE}:${env.IMAGE_TAG}"
+        }
+        failure {
+            echo '流水线失败：先看红色的 stage，再看那一段日志的最后 30 行'
+        }
+        always {
+            // 清理本次构建的本地镜像，防止 lab-ci 磁盘被撑满
+            sh 'docker image rm "$API_IMAGE:$IMAGE_TAG" "$WEB_IMAGE:$IMAGE_TAG" 2>/dev/null || true'
+            cleanWs()
+        }
+    }
+}

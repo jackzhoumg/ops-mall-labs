@@ -1,0 +1,92 @@
+# promtool 单元测试：不用真集群，验证 SLO 规则和告警逻辑对不对。
+# 用法：promtool test rules slo/rules/mall-api-slo.rules.test.yml
+#
+# 场景：前 60 分钟每秒 9 个正常请求；第 60 分钟起每秒多 1 个 500 错误（错误率 10%）；
+#       同时有 10% 的请求超过 500ms（延迟 SLO 也开始烧）。
+# 浮点数比较用 round()，避免 0.09999999999999998 和 0.1 对不上。
+rule_files:
+  - mall-api-slo.rules.yml
+
+evaluation_interval: 30s
+
+tests:
+  - interval: 1m
+    input_series:
+      - series: 'mall_http_requests_total{job="mall-api",namespace="mall",method="GET",route="GET /api/products",status="200"}'
+        values: '0+540x150'
+      - series: 'mall_http_requests_total{job="mall-api",namespace="mall",method="GET",route="GET /api/debug/error",status="500"}'
+        values: '0x60 0+60x90'
+      # 探针请求、其他命名空间的请求都不应该算进 SLI
+      - series: 'mall_http_requests_total{job="mall-api",namespace="mall-staging",method="GET",route="GET /api/products",status="500"}'
+        values: '0+6000x150'
+      - series: 'mall_http_requests_total{job="mall-api",namespace="mall",method="GET",route="GET /readyz",status="503"}'
+        values: '0+600x150'
+      - series: 'mall_http_request_duration_seconds_count{job="mall-api",namespace="mall",method="GET",route="GET /api/products"}'
+        values: '0+600x150'
+      # 前 60 分钟全部在 500ms 内；之后每分钟 600 个请求里只有 540 个在 500ms 内
+      - series: 'mall_http_request_duration_seconds_bucket{job="mall-api",namespace="mall",method="GET",route="GET /api/products",le="0.5"}'
+        values: '0+600x60 36540+540x89'
+
+    promql_expr_test:
+      # 错误开始前：可用性错误比例为 0
+      - expr: slo:sli_error:ratio_rate5m{slo="availability"}
+        eval_time: 50m
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate5m{service="mall-api",slo="availability"}'
+            value: 0
+      # 错误开始 40 分钟后：5 分钟错误比例 = 1 / 10
+      - expr: round(slo:sli_error:ratio_rate5m{slo="availability"}, 0.0001)
+        eval_time: 100m
+        exp_samples:
+          - labels: '{service="mall-api",slo="availability"}'
+            value: 0.1
+      # 延迟：10% 的请求超过 500ms
+      - expr: round(slo:sli_error:ratio_rate5m{slo="latency"}, 0.0001)
+        eval_time: 100m
+        exp_samples:
+          - labels: '{service="mall-api",slo="latency"}'
+            value: 0.1
+      # 错误预算：99.9% 的目标，预算 0.1%
+      - expr: round(slo:error_budget:ratio{slo="availability"}, 0.0001)
+        eval_time: 10m
+        exp_samples:
+          - labels: '{service="mall-api",slo="availability"}'
+            value: 0.001
+      # 燃烧率：错误比例 10% / 预算 0.1% = 100 倍
+      - expr: round(slo:burn_rate:1h{slo="availability"})
+        eval_time: 125m
+        exp_samples:
+          - labels: '{service="mall-api",slo="availability"}'
+            value: 100
+
+    alert_rule_test:
+      # 错误开始前不告警
+      - eval_time: 55m
+        alertname: SLOErrorBudgetBurnFast
+        exp_alerts: []
+      # 错误开始 30 分钟后：可用性 1h 错误比例约 5% > 14.4 × 0.1%，快烧告警已触发；
+      # 延迟预算是 1%，1h 约 5% < 14.4%、6h 约 3.3% < 6%，还没到告警线
+      - eval_time: 90m
+        alertname: SLOErrorBudgetBurnFast
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              notify: page
+              service: mall-api
+              slo: availability
+            exp_annotations:
+              summary: "mall-api 的 availability 错误预算正在快速消耗"
+              description: "按当前速度，几小时到一两天内就会烧光 30 天的错误预算。当前错误比例 5.097%。先止血：回滚最近的发布或切流量。"
+              runbook_url: "https://github.com/jackzhoumg/ops-mall-labs/blob/main/labs/sre-1-tracing-slo/slo/error-budget-policy.md"
+
+  # 从没出现过 5xx（没有 status="5xx" 的时间序列）时，错误比例应该是 0 而不是“没数据”
+  - interval: 1m
+    input_series:
+      - series: 'mall_http_requests_total{job="mall-api",namespace="mall",method="GET",route="GET /api/products",status="200"}'
+        values: '0+600x30'
+    promql_expr_test:
+      - expr: slo:sli_error:ratio_rate5m{slo="availability"}
+        eval_time: 20m
+        exp_samples:
+          - labels: 'slo:sli_error:ratio_rate5m{service="mall-api",slo="availability"}'
+            value: 0

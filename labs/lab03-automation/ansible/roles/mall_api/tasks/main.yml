@@ -1,0 +1,90 @@
+- name: 检查控制节点上有没有编译好的 mall-api
+  ansible.builtin.stat:
+    path: "{{ mall_api_binary_src }}"
+  delegate_to: localhost
+  become: false
+  run_once: true
+  register: mall_api_bin
+
+- name: 没有二进制就提示先编译
+  ansible.builtin.assert:
+    that: mall_api_bin.stat.exists
+    fail_msg: >-
+      找不到 {{ mall_api_binary_src }}。先在仓库根目录执行：
+      cd app && CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version={{ mall_version }}" -o mall-api .
+      （Apple Silicon 上的 arm64 虚拟机把 GOARCH 改成 arm64）
+  run_once: true
+
+- name: 创建运行用户（系统用户，不能登录）
+  ansible.builtin.user:
+    name: "{{ mall_api_user }}"
+    system: true
+    shell: /sbin/nologin
+    create_home: false
+
+- name: 程序和配置目录
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: "{{ mall_api_user }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ mall_api_install_dir }}", mode: "0755" }
+    - { path: "{{ mall_api_conf_dir }}", mode: "0750" }
+
+- name: 拷贝二进制
+  ansible.builtin.copy:
+    src: "{{ mall_api_binary_src }}"
+    dest: "{{ mall_api_install_dir }}/mall-api"
+    owner: root
+    group: root
+    mode: "0755"
+  notify: restart mall-api
+
+- name: 环境变量文件（含数据库密码）
+  ansible.builtin.template:
+    src: mall-api.env.j2
+    dest: "{{ mall_api_conf_dir }}/mall-api.env"
+    owner: root
+    group: "{{ mall_api_user }}"
+    mode: "0640"
+  # --diff 会把文件前后内容打印出来，含密码的文件要关掉
+  diff: false
+  notify: restart mall-api
+
+- name: systemd 服务文件
+  ansible.builtin.template:
+    src: mall-api.service.j2
+    dest: /etc/systemd/system/mall-api.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: restart mall-api
+
+- name: 防火墙对实验网段开放 8080（另一台 Nginx 会反代过来）
+  ansible.posix.firewalld:
+    rich_rule: 'rule family="ipv4" source address="{{ lab_network }}" port port="{{ mall_api_port }}" protocol="tcp" accept'
+    permanent: true
+    immediate: true
+    state: enabled
+
+- name: 启动 mall-api
+  ansible.builtin.systemd_service:
+    name: mall-api
+    state: started
+    enabled: true
+    daemon_reload: true
+
+- name: 有变更就现在重启，下面马上验证
+  ansible.builtin.meta: flush_handlers
+
+# 配合 site.yml 里的 serial: 1：这一台就绪了才去部署下一台，坏版本不会一次打挂两台
+- name: 等待 /readyz 返回 200
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ mall_api_port }}/readyz"
+    status_code: 200
+  register: readyz
+  retries: 10
+  delay: 3
+  until: readyz.status == 200

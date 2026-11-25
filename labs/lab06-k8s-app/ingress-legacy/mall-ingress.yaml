@@ -1,0 +1,43 @@
+# 对照用：和 gateway/40-httproute.yaml 等价的 Ingress 写法（Ingress NGINX 控制器）
+# 只用来看懂存量集群。本实验集群没装 Ingress NGINX，apply 了也没有控制器处理它。
+# Ingress NGINX 已于 2026 年 3 月停止维护（不再修复安全漏洞），新集群用 Gateway API。
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: mall
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+  annotations:
+    # cert-manager 看到这个注解，自动为 spec.tls 里的域名签证书（ingress-shim）
+    cert-manager.io/cluster-issuer: lab-ca-issuer
+    # http 跳 https（配了 tls 时 Ingress NGINX 默认就跳，这里写明）
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    # 超时、限流、改写这类功能只能靠控制器私有注解，换控制器就得重写
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+spec:
+  # 相当于 Gateway API 的 GatewayClass
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - mall.lab.local
+      # 每个 Ingress 自己带证书 Secret，放在应用命名空间
+      secretName: mall-lab-local-tls
+  rules:
+    - host: mall.lab.local
+      http:
+        paths:
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: mall-api
+                port:
+                  name: http
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: mall-web
+                port:
+                  name: http

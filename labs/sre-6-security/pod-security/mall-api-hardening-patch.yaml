@@ -1,0 +1,32 @@
+# mall-api 安全加固补丁（strategic merge patch），满足 Pod Security restricted 标准。
+# 用法：kubectl -n mall patch deployment mall-api --patch-file mall-api-hardening-patch.yaml
+# 前提：容器名是 mall-api。查看：kubectl -n mall get deploy mall-api -o jsonpath='{.spec.template.spec.containers[*].name}'
+# 如果 mall 命名空间由 ArgoCD 管理（Lab 08），直接 patch 会被自动同步改回去，要把同样的内容写进 Helm values / Chart。
+spec:
+  template:
+    spec:
+      # mall-api 不调用 Kubernetes API，不需要 ServiceAccount token。不挂载，Pod 被攻破也拿不到集群凭据
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        # 65532 是 distroless 镜像约定的 nonroot 用户；镜像里没有这个用户也能跑，Go 静态二进制不依赖 /etc/passwd
+        runAsUser: 65532
+        runAsGroup: 65532
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mall-api
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            privileged: false
+            capabilities:
+              drop: ["ALL"]
+          # 只读根文件系统下，程序如果要写临时文件只能写这里
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

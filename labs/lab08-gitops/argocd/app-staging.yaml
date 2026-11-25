@@ -1,0 +1,41 @@
+# 预发环境：Git 一变就自动同步，有人手工改了集群也会被改回来（selfHeal）
+# kubectl apply -f labs/lab08-gitops/argocd/app-staging.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: ops-mall-staging
+  namespace: argocd
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+  # 删除 Application 时级联删除它管理的资源。预发可以这样，生产不加
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: ops-mall
+  source:
+    repoURL: http://gitlab.lab.local/ops/ops-mall-labs.git
+    targetRevision: main
+    path: labs/lab08-gitops/charts/ops-mall
+    helm:
+      releaseName: ops-mall
+      valueFiles:
+        - values-staging.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: mall-staging
+  syncPolicy:
+    automated:
+      # Git 里删掉的资源，集群里也删掉
+      prune: true
+      # 集群里被手工改动的资源，自动改回 Git 里的样子
+      selfHeal: true
+    syncOptions:
+      - PrunePropagationPolicy=foreground
+      - PruneLast=true
+    retry:
+      limit: 3
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 2m
+  revisionHistoryLimit: 10

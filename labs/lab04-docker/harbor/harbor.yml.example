@@ -1,0 +1,62 @@
+# Harbor 配置示例（只列出实验需要改的项）。
+# 用法：解压离线安装包后，以安装包里的 harbor.yml.tmpl 为底，按下面的值修改，另存为 harbor.yml。
+# 不要直接用本文件替换 harbor.yml.tmpl：不同版本的模板字段会变，以安装包自带的为准。
+# 写作时版本 Harbor v2.16.0。
+
+hostname: harbor.lab.local
+
+# HTTP 只用来跳转到 HTTPS
+http:
+  port: 80
+
+https:
+  port: 443
+  certificate: /data/cert/harbor.lab.local.crt
+  private_key: /data/cert/harbor.lab.local.key
+
+# 首次登录的 admin 密码，登录后马上在页面上修改
+harbor_admin_password: ChangeMe-Harbor-123
+
+# Harbor 自带 PostgreSQL 的密码
+database:
+  password: ChangeMe-HarborDB-123
+  max_idle_conns: 100
+  max_open_conns: 900
+  conn_max_lifetime: 5m
+  conn_max_idle_time: 0
+
+# 镜像、数据库、证书都在这里，建议单独一块盘
+data_volume: /data
+
+trivy:
+  ignore_unfixed: false
+  # 漏洞库默认从 ghcr.io 下载，国内经常超时：
+  #   方案 1：给 Harbor 配公司的 HTTP 代理（下面 proxy 段）
+  #   方案 2：db_repository 改成你能访问的镜像仓库里同步好的 trivy-db
+  #   方案 3：skip_update + offline_scan，手工放离线漏洞库（见 Harbor 文档）
+  skip_update: false
+  skip_java_db_update: false
+  db_repository: ghcr.io/aquasecurity/trivy-db
+  java_db_repository: ghcr.io/aquasecurity/trivy-java-db
+  offline_scan: false
+  security_check: vuln
+  insecure: false
+  timeout: 5m0s
+
+log:
+  level: info
+  local:
+    rotate_count: 50
+    rotate_size: 200M
+    location: /var/log/harbor
+
+# 需要走公司代理访问外网时填写（Trivy 下载漏洞库、代理缓存项目拉 Docker Hub）
+proxy:
+  http_proxy:
+  https_proxy:
+  no_proxy:
+  components:
+    - core
+    - jobservice
+    - registry
+    - trivy

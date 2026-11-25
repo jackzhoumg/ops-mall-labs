@@ -1,0 +1,21 @@
+# Envoy Gateway 会为每个 Gateway 创建一组 Envoy Pod 和一个 LoadBalancer Service。
+# 这里通过 EnvoyProxy 给那个 Service 加 MetalLB 注解，固定拿 192.168.56.200，
+# 这样 hosts 文件里写死的 IP 不会因为重建而变。
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: lab-proxy
+  namespace: envoy-gateway-system
+spec:
+  provider:
+    type: Kubernetes
+    kubernetes:
+      envoyService:
+        type: LoadBalancer
+        # Local：保留客户端真实源 IP，只由有 Envoy Pod 的节点应答
+        externalTrafficPolicy: Local
+        annotations:
+          metallb.io/loadBalancerIPs: 192.168.56.200
+      envoyDeployment:
+        # 两个副本，一台节点挂了入口不断
+        replicas: 2

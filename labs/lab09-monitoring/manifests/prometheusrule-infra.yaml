@@ -1,0 +1,179 @@
+# Lab 09：虚拟机主机、MySQL、Redis 告警
+# 指标来源：node_exporter（job=vm-node）、mysqld_exporter（job=vm-mysql）、redis_exporter（job=vm-redis），
+# 抓取配置见 scrapeconfig-vms.yaml，每个目标都带 hostname 标签。
+# K8s 节点本身的主机告警用 kube-prometheus-stack 自带规则（NodeFilesystemSpaceFillingUp 等），这里不重复写。
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: ops-mall-infra
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  groups:
+    - name: vm-host.alerts
+      rules:
+        - alert: HostDown
+          expr: up{job="vm-node"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "主机 {{ $labels.hostname }} 不可达"
+            description: "{{ $labels.instance }} 的 node_exporter 连续 1 分钟抓取失败：机器宕机、网络断开或 node_exporter 停了。"
+
+        - alert: HostHighCpu
+          expr: |
+            100 * (1 - avg by (hostname, instance) (
+              rate(node_cpu_seconds_total{job="vm-node", mode="idle"}[5m])
+            )) > 85
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} CPU 使用率 {{ $value | printf \"%.1f\" }}%"
+            description: "CPU 使用率超过 85% 已持续 10 分钟。用 top / pidstat 找占 CPU 的进程。"
+
+        - alert: HostHighMemory
+          expr: |
+            100 * (1 - node_memory_MemAvailable_bytes{job="vm-node"} / node_memory_MemTotal_bytes{job="vm-node"}) > 90
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} 内存使用率 {{ $value | printf \"%.1f\" }}%"
+            description: "可用内存低于 10% 已持续 10 分钟，继续涨会触发 OOM Killer。"
+
+        # 两档阈值：剩余 < 20% 是 warning，< 10% 是 critical
+        - alert: HostDiskAlmostFull
+          expr: |
+            100 * node_filesystem_avail_bytes{job="vm-node", fstype!~"tmpfs|devtmpfs|overlay|squashfs"}
+              / node_filesystem_size_bytes{job="vm-node", fstype!~"tmpfs|devtmpfs|overlay|squashfs"} < 10
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} 分区 {{ $labels.mountpoint }} 只剩 {{ $value | printf \"%.1f\" }}%"
+            description: "磁盘写满会导致 MySQL 停写、Nginx 写不了日志。先用 du -xh --max-depth=1 找大目录。"
+        - alert: HostDiskAlmostFull
+          expr: |
+            100 * node_filesystem_avail_bytes{job="vm-node", fstype!~"tmpfs|devtmpfs|overlay|squashfs"}
+              / node_filesystem_size_bytes{job="vm-node", fstype!~"tmpfs|devtmpfs|overlay|squashfs"} < 20
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} 分区 {{ $labels.mountpoint }} 只剩 {{ $value | printf \"%.1f\" }}%"
+            description: "剩余空间低于 20%。"
+
+        # 预测型告警：按最近 6 小时的下降速度线性外推，24 小时后可用空间会小于 0。
+        # 只看"预测"会把每天都会清理的临时目录误报出来，所以再加一个"当前剩余 < 40%"的条件。
+        - alert: HostDiskWillFillIn24h
+          expr: |
+            predict_linear(node_filesystem_avail_bytes{job="vm-node", fstype!~"tmpfs|devtmpfs|overlay|squashfs"}[6h], 24 * 3600) < 0
+              and
+            node_filesystem_avail_bytes{job="vm-node", fstype!~"tmpfs|devtmpfs|overlay|squashfs"}
+              / node_filesystem_size_bytes{job="vm-node", fstype!~"tmpfs|devtmpfs|overlay|squashfs"} < 0.4
+              and
+            node_filesystem_readonly{job="vm-node", fstype!~"tmpfs|devtmpfs|overlay|squashfs"} == 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} 分区 {{ $labels.mountpoint }} 预计 24 小时内写满"
+            description: "按最近 6 小时的写入速度推算，24 小时内会写满。查日志是否没轮转、备份文件是否没清理。"
+
+    - name: vm-mysql.alerts
+      rules:
+        - alert: MysqlDown
+          expr: mysql_up{job="vm-mysql"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} MySQL 连不上"
+            description: "mysqld_exporter 在运行，但连不上 MySQL（进程挂了、账号密码不对或连接数满了）。"
+
+        # MySQL 8.0 的 SHOW SLAVE STATUS 列名是 Slave_IO_Running / Seconds_Behind_Master，
+        # 8.4 起只剩 SHOW REPLICA STATUS，列名是 Replica_IO_Running / Seconds_Behind_Source。
+        # mysqld_exporter 按列名生成指标，所以用 __name__ 正则把两种写法都兼容了。
+        - alert: MysqlReplicationNotRunning
+          expr: |
+            min by (hostname, instance) (
+              {__name__=~"mysql_slave_status_(slave|replica)_(io|sql)_running", job="vm-mysql"}
+            ) == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} MySQL 复制线程停了"
+            description: "IO 或 SQL 线程不在运行，从库不再同步主库数据。在从库执行 SHOW REPLICA STATUS\\G 看 Last_IO_Error / Last_SQL_Error。"
+
+        - alert: MysqlReplicationLag
+          expr: |
+            max by (hostname, instance) (
+              {__name__=~"mysql_slave_status_seconds_behind_(master|source)", job="vm-mysql"}
+            ) > 300
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} 主从延迟 {{ $value }} 秒"
+            description: "从库落后主库超过 5 分钟，读从库的业务会读到旧数据。"
+        - alert: MysqlReplicationLag
+          expr: |
+            max by (hostname, instance) (
+              {__name__=~"mysql_slave_status_seconds_behind_(master|source)", job="vm-mysql"}
+            ) > 30
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} 主从延迟 {{ $value }} 秒"
+            description: "从库落后主库超过 30 秒。常见原因：主库大事务、从库机器性能差、从库上有慢查询。"
+
+        - alert: MysqlTooManyConnections
+          expr: |
+            max_over_time(mysql_global_status_threads_connected{job="vm-mysql"}[2m])
+              / mysql_global_variables_max_connections{job="vm-mysql"} > 0.8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} MySQL 连接数达到上限的 {{ $value | humanizePercentage }}"
+            description: "连接数用满后新连接会报 Too many connections。查 SHOW PROCESSLIST，看是不是应用连接池配置太大或有连接泄漏。"
+
+    - name: vm-redis.alerts
+      rules:
+        - alert: RedisDown
+          expr: redis_up{job="vm-redis"} == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} Redis 连不上"
+            description: "mall-api 的商品列表缓存会失效，所有请求直接打到 MySQL。"
+
+        - alert: RedisMemoryHigh
+          expr: |
+            redis_memory_used_bytes{job="vm-redis"} / redis_memory_max_bytes{job="vm-redis"} > 0.9
+              and
+            redis_memory_max_bytes{job="vm-redis"} > 0
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} Redis 内存用到 maxmemory 的 {{ $value | humanizePercentage }}"
+            description: "超过 maxmemory 后按淘汰策略删 key，或者直接拒绝写入（noeviction）。"
+
+    - name: exporter.alerts
+      rules:
+        # exporter 进程本身挂了：此时 mysql_up / redis_up 这些指标都没了，上面的告警不会响，要单独盯
+        - alert: ExporterDown
+          expr: up{job=~"vm-mysql|vm-redis"} == 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} 上的 {{ $labels.job }} exporter 抓取失败"
+            description: "监控盲区：这台机器的数据库指标已经看不到了。systemctl status 看 exporter 进程。"

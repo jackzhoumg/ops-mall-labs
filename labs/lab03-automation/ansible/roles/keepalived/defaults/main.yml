@@ -1,0 +1,6 @@
+keepalived_router_id: 51
+keepalived_state: BACKUP
+keepalived_priority: 90
+keepalived_auth_pass: "{{ vault_keepalived_auth_pass }}"
+# 单播给其他 web 机器：VMware、云服务器上组播经常不通，单播最省心
+keepalived_peers: "{{ groups['web'] | difference([inventory_hostname]) | map('extract', hostvars, 'ansible_host') | list }}"

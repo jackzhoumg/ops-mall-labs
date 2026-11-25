@@ -1,0 +1,32 @@
+# Lab 09：让 Prometheus 自动发现并抓取 mall-api 的 /metrics
+# ServiceMonitor 不直接写 IP：它按标签选 Service，Operator 再根据 Service 背后的 Endpoints
+# 生成抓取目标。Pod 扩缩容、重建换 IP，抓取目标自动跟着变。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mall-api
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: mall-api
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  # 用 Service 上的这个标签值当 job 名，三个环境的 job 都叫 mall-api，靠 namespace 标签区分
+  jobLabel: app.kubernetes.io/name
+  namespaceSelector:
+    matchNames:
+      - mall
+      - mall-staging
+      - mall-prod
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mall-api
+  endpoints:
+    # 对应 Service 里 name: http 的端口（8080）。端口名不一致时这里抓不到任何目标。
+    - port: http
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      relabelings:
+        # 把 Pod 所在节点名带上，排查"是不是某台节点有问题"时有用
+        - sourceLabels: [__meta_kubernetes_pod_node_name]
+          targetLabel: node

@@ -1,0 +1,17 @@
+// 把这个 stage 加进 Lab 07 的 Jenkinsfile：放在 "Build & Push" 之后、"Deploy" 之前。
+// 构建机（lab-ci）上要先装好 trivy（写作时版本 0.76.2）。
+// 有可修复的 HIGH / CRITICAL 漏洞时 trivy 返回 1，sh 步骤失败，流水线停在这里，不会部署。
+stage('Image Scan') {
+    steps {
+        sh '''
+            IMAGE="harbor.lab.local/mall/mall-api:$(echo "$GIT_COMMIT" | cut -c1-7)"
+            trivy image --scanners vuln --format json --output trivy-report.json "$IMAGE"
+            trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE"
+        '''
+    }
+    post {
+        always {
+            archiveArtifacts artifacts: 'trivy-report.json', allowEmptyArchive: true
+        }
+    }
+}

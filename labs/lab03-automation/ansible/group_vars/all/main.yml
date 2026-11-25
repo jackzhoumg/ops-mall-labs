@@ -1,0 +1,45 @@
+# 所有主机共用的变量。密码类变量统一引用 vault.yml 里的 vault_ 开头变量，
+# 这样 grep 一下就知道某个变量来自加密文件。
+
+# 仓库根目录（ansible 目录往上三级），用来找 app/ sql/ web/ 和 scripts/
+repo_root: "{{ playbook_dir }}/../../.."
+scripts_src: "{{ playbook_dir }}/../scripts"
+
+lab_network: 192.168.56.0/24
+lab_timezone: Asia/Shanghai
+
+# 写进每台机器 /etc/hosts 的主机名和域名
+mall_domain: mall.lab.local
+mall_vip: 192.168.56.10
+lab_hosts:
+  - { ip: 192.168.56.10, names: "mall.lab.local" }
+  - { ip: 192.168.56.11, names: "lab-web1" }
+  - { ip: 192.168.56.12, names: "lab-web2" }
+  - { ip: 192.168.56.13, names: "lab-db1" }
+  - { ip: 192.168.56.14, names: "lab-db2" }
+  - { ip: 192.168.56.15, names: "lab-dev harbor.lab.local" }
+
+# ---------- 数据库 ----------
+mysql_primary_host: "{{ hostvars[groups['db_primary'][0]]['ansible_host'] }}"
+mysql_port: 3306
+mysql_root_password: "{{ vault_mysql_root_password }}"
+mysql_repl_user: repl
+mysql_repl_password: "{{ vault_mysql_repl_password }}"
+mysql_backup_user: backup
+mysql_backup_password: "{{ vault_mysql_backup_password }}"
+
+mall_db_name: mall
+mall_db_user: mall
+mall_db_password: "{{ vault_mall_db_password }}"
+
+# ---------- Redis ----------
+redis_host: "{{ hostvars[groups['redis'][0]]['ansible_host'] }}"
+redis_port: 6379
+redis_password: "{{ vault_redis_password }}"
+
+# ---------- 应用 ----------
+mall_version: v1.0.0
+
+# ---------- 巡检脚本（common 角色部署，每 10 分钟跑一次） ----------
+inspect_services: "sshd chronyd"
+inspect_cert_files: ""

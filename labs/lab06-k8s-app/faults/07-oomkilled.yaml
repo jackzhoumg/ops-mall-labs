@@ -1,0 +1,44 @@
+# Lab 06 故障练习：OOMKilled
+# 用法：kubectl apply -f faults/07-oomkilled.yaml   排查完：kubectl delete -f faults/07-oomkilled.yaml
+# 故障 Pod 用单独的名字和标签（fault-*），不会混进 mall-api / mall-web 的 Service 后端
+# 先别看注释里的提示，用 get / describe / logs / events 自己找原因
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fault-oom
+  namespace: mall
+  labels:
+    app.kubernetes.io/name: fault-oom
+    app.kubernetes.io/part-of: ops-mall-faults
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: fault-oom
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: fault-oom
+        app.kubernetes.io/part-of: ops-mall-faults
+    spec:
+      imagePullSecrets:
+        - name: harbor-pull
+      containers:
+        - name: mall-api
+          image: harbor.lab.local/mall/mall-api:v1.0.0
+          envFrom:
+            - configMapRef:
+                name: mall-api-config
+            - secretRef:
+                name: mall-api-secret
+          env:
+            # 打开故障演练接口 /api/debug/leak（只在这个练习里开）
+            - name: MALL_DEBUG
+              value: "true"
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 500m
+              memory: 64Mi

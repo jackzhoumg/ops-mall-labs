@@ -1,0 +1,28 @@
+# 预发环境（命名空间 mall-staging），ArgoCD 自动同步
+# CI 在 main 分支构建成功后，用 yq 改下面两个 tag 并提交到 Git
+environment: staging
+
+api:
+  replicas: 1
+  image:
+    tag: "v1.0.0"
+  config:
+    MALL_LOG_LEVEL: debug
+    # 预发打开故障演练接口，方便测试
+    MALL_DEBUG: "true"
+  pdb:
+    enabled: false
+  sealedSecret:
+    enabled: false
+    encryptedData: {}
+
+web:
+  replicas: 1
+  image:
+    tag: "v1.0.0"
+  pdb:
+    enabled: false
+
+httpRoute:
+  hostnames:
+    - mall-staging.lab.local

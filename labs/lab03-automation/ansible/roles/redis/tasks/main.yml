@@ -1,0 +1,52 @@
+- name: 安装 Redis
+  ansible.builtin.dnf:
+    name: redis
+    state: present
+
+- name: 修改 Redis 配置
+  ansible.builtin.lineinfile:
+    path: "{{ redis_conf }}"
+    # 匹配已有的配置行（包括被注释掉的），找不到就追加到文件末尾
+    regexp: '^#?\s*{{ item.key }}\s'
+    line: "{{ item.key }} {{ item.value }}"
+    owner: redis
+    group: root
+    mode: "0640"
+  loop: "{{ redis_settings }}"
+  loop_control:
+    label: "{{ item.key }}"   # 循环输出里只显示配置名，不把密码打到屏幕上
+  notify: restart redis
+  diff: false
+
+- name: Redis 建议的内核参数，避免后台持久化 fork 失败
+  ansible.posix.sysctl:
+    name: vm.overcommit_memory
+    value: "1"
+    sysctl_file: /etc/sysctl.d/90-redis.conf
+    state: present
+
+- name: 防火墙只对实验网段开放 6379
+  ansible.posix.firewalld:
+    rich_rule: 'rule family="ipv4" source address="{{ lab_network }}" port port="{{ redis_port }}" protocol="tcp" accept'
+    permanent: true
+    immediate: true
+    state: enabled
+
+- name: 启动 Redis
+  ansible.builtin.systemd_service:
+    name: redis
+    state: started
+    enabled: true
+
+- name: 配置变了现在就重启
+  ansible.builtin.meta: flush_handlers
+
+- name: 确认密码生效
+  ansible.builtin.command:
+    cmd: redis-cli -h 127.0.0.1 -p {{ redis_port }} ping
+  environment:
+    # 用环境变量传密码，不出现在命令行（ps 能看到命令行参数）
+    REDISCLI_AUTH: "{{ redis_password }}"
+  register: redis_ping
+  changed_when: false
+  failed_when: "'PONG' not in redis_ping.stdout"

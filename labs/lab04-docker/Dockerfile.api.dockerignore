@@ -1,0 +1,8 @@
+# Dockerfile.api 专用的 ignore 文件（BuildKit 规则：<Dockerfile 文件名>.dockerignore，放在 Dockerfile 同目录，
+# 优先于构建上下文根目录的 .dockerignore）。这样不用在仓库根目录放文件。
+#
+# 白名单写法：先排除所有，再放行需要的。构建上下文从几十 MB 降到几十 KB，也不会把 .git、密钥打进镜像
+*
+!app/
+# 本地编译出来的二进制不要带进去，镜像里会重新编译
+app/mall-api

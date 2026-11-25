@@ -1,0 +1,24 @@
+# MySQL 8.4 LTS 官方社区版。国内用清华镜像，境外机器可改成 https://repo.mysql.com/yum/mysql-8.4-community/el/9/$basearch/
+mysql_repo_baseurl: "https://mirrors.tuna.tsinghua.edu.cn/mysql/yum/mysql-8.4-community-el9-{{ ansible_facts['architecture'] }}/"
+mysql_repo_gpgkey: https://repo.mysql.com/RPM-GPG-KEY-mysql-2023
+
+mysql_socket: /var/lib/mysql/mysql.sock
+mysql_datadir: /var/lib/mysql
+mysql_bind_address: 0.0.0.0
+# 复制账号只允许实验网段连接
+mysql_repl_host: "192.168.56.%"
+mysql_max_connections: 500
+# 2G 内存的实验机给 512M；生产一般给物理内存的 50%-70%
+mysql_innodb_buffer_pool_size: 512M
+mysql_binlog_expire_seconds: 604800
+mysql_slow_query_seconds: 1
+
+# 主库还是从库，由 inventory 分组决定
+mysql_role: "{{ 'replica' if inventory_hostname in groups['db_replica'] else 'primary' }}"
+
+# 逻辑备份放在从库做，不占主库资源
+mysql_backup_enabled: "{{ mysql_role == 'replica' }}"
+mysql_backup_dir: /data/backup/mysql
+mysql_backup_retention_days: 7
+mysql_backup_cron_hour: "2"
+mysql_backup_cron_minute: "30"

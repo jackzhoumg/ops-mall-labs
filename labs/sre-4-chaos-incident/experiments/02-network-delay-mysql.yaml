@@ -1,0 +1,28 @@
+# 实验 2：mall-api 到数据库机器（lab-db1 192.168.56.13）的网络延迟 200ms ± 50ms，持续 5 分钟
+# 稳态假设：/api/products P95 < 1s，下单成功率 >= 99%。
+# 注意：MySQL 和 Redis 都在 192.168.56.13，按 IP 注入会同时影响两者。这本身就是一个发现：同机部署的依赖会一起出问题。
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: mall-api-delay-to-db
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+    chaos.lab/drill: "sre-4"
+spec:
+  action: delay
+  mode: all
+  selector:
+    namespaces:
+      - mall
+    labelSelectors:
+      app.kubernetes.io/name: mall-api
+  direction: to
+  # 集群外的目标用 externalTargets，只在 direction: to 时生效。网段不同的同学改成自己的数据库 IP
+  externalTargets:
+    - 192.168.56.13
+  delay:
+    latency: "200ms"
+    jitter: "50ms"
+    correlation: "25"
+  duration: "5m"

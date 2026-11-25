@@ -1,0 +1,51 @@
+# ArgoCD 3.x 默认在 argocd-cm 的 resource.exclusions 里排除了 Endpoints 和 EndpointSlice，
+# 结果是 Chart 里给 MySQL / Redis 写的 EndpointSlice 会被 ArgoCD 直接忽略、不创建。
+# 这里把默认排除列表原样抄过来（v3.6.2 的 manifests/base/config/argocd-cm.yaml），只去掉 Endpoints / EndpointSlice。
+# 升级 ArgoCD 后要对照新版本的默认列表再检查一遍。
+#
+# kubectl -n argocd patch configmap argocd-cm --type merge --patch-file labs/lab08-gitops/argocd/argocd-cm-patch.yaml
+# kubectl -n argocd rollout restart statefulset argocd-application-controller
+data:
+  resource.exclusions: |
+    - apiGroups:
+      - coordination.k8s.io
+      kinds:
+      - Lease
+    - apiGroups:
+      - authentication.k8s.io
+      - authorization.k8s.io
+      kinds:
+      - SelfSubjectReview
+      - TokenReview
+      - LocalSubjectAccessReview
+      - SelfSubjectAccessReview
+      - SelfSubjectRulesReview
+      - SubjectAccessReview
+    - apiGroups:
+      - certificates.k8s.io
+      kinds:
+      - CertificateSigningRequest
+    - apiGroups:
+      - cert-manager.io
+      kinds:
+      - CertificateRequest
+    - apiGroups:
+      - cilium.io
+      kinds:
+      - CiliumIdentity
+      - CiliumEndpoint
+      - CiliumEndpointSlice
+    - apiGroups:
+      - kyverno.io
+      - reports.kyverno.io
+      - wgpolicyk8s.io
+      kinds:
+      - PolicyReport
+      - ClusterPolicyReport
+      - EphemeralReport
+      - ClusterEphemeralReport
+      - AdmissionReport
+      - ClusterAdmissionReport
+      - BackgroundScanReport
+      - ClusterBackgroundScanReport
+      - UpdateRequest

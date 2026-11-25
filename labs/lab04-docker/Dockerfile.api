@@ -1,0 +1,83 @@
+# mall-api 镜像：多阶段构建
+#
+# 构建上下文是仓库根目录（在仓库根目录执行）：
+#   docker build -f labs/lab04-docker/Dockerfile.api \
+#     --build-arg VERSION=v1.0.0 \
+#     -t harbor.lab.local/mall/mall-api:v1.0.0 .
+#
+# 默认产出 alpine 版（带 HEALTHCHECK，能 docker exec 进去排查）。
+# 想要更小、攻击面更少的 distroless 版：加 --target distroless（没有 shell，也就没有 HEALTHCHECK，见教程取舍）。
+#
+# 没写 "# syntax=docker/dockerfile:1" 这一行：写了 BuildKit 会去 Docker Hub 拉前端镜像，国内经常卡住。
+# 下面用到的 RUN --mount=type=cache 是 BuildKit 内置前端就支持的。
+
+# ---------- 第 1 阶段：编译 ----------
+# --platform=$BUILDPLATFORM：编译器跑在构建机本身的架构上，由 Go 交叉编译出目标架构，比 QEMU 模拟快得多
+FROM --platform=$BUILDPLATFORM golang:1.26-alpine AS builder
+
+# 国内下载 Go 依赖用 goproxy.cn；境外构建机可以 --build-arg GOPROXY=https://proxy.golang.org,direct
+ARG GOPROXY=https://goproxy.cn,direct
+ARG VERSION=dev
+# BuildKit 自动注入目标平台，docker buildx build --platform linux/arm64 时就是 arm64
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
+
+WORKDIR /src
+
+# 先只拷 go.mod / go.sum 下载依赖：代码改了但依赖没变时，这一层直接用缓存
+COPY app/go.mod app/go.sum ./
+RUN --mount=type=cache,target=/go/pkg/mod \
+    GOPROXY=${GOPROXY} go mod download
+
+COPY app/ ./
+
+# CGO_ENABLED=0：纯静态二进制，不依赖 glibc / musl，放进 distroless/static 或 scratch 都能跑
+# -s -w：去掉符号表和调试信息，二进制小 30% 左右
+# -trimpath：去掉编译机上的绝对路径，构建结果可复现，也不泄露目录结构
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/go-build \
+    CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} \
+    go build -trimpath -ldflags "-s -w -X main.version=${VERSION}" -o /out/mall-api .
+
+# ---------- 第 2 阶段 A：distroless（最小，无 shell） ----------
+# 写作时用 Debian 13 版；gcr.io 国内访问不了，需要先同步到 Harbor（见教程“国内拉镜像”）
+FROM gcr.io/distroless/static-debian13:nonroot AS distroless
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="mall-api" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.source="https://github.com/jackzhoumg/ops-mall-labs"
+COPY --from=builder /out/mall-api /mall-api
+# nonroot 镜像自带 uid 65532 的 nonroot 用户
+USER 65532:65532
+EXPOSE 8080
+ENTRYPOINT ["/mall-api"]
+
+# ---------- 第 2 阶段 B：alpine（默认，带 busybox，可做 HEALTHCHECK） ----------
+FROM alpine:3.24 AS alpine
+ARG VERSION=dev
+LABEL org.opencontainers.image.title="mall-api" \
+      org.opencontainers.image.version="${VERSION}" \
+      org.opencontainers.image.source="https://github.com/jackzhoumg/ops-mall-labs"
+
+# tzdata 让日志时间能按 TZ 环境变量显示；ca-certificates 以后调用外部 HTTPS 接口时要用
+# 固定 uid/gid 10001：K8s 里 runAsUser、挂载卷的属主都按数字对齐
+RUN apk add --no-cache ca-certificates tzdata \
+    && addgroup -S -g 10001 mall \
+    && adduser -S -D -H -u 10001 -G mall mall
+
+COPY --from=builder /out/mall-api /usr/local/bin/mall-api
+
+# 版本号已经在编译时用 -ldflags 写进二进制，这里不再重复设置 MALL_VERSION
+ENV MALL_LISTEN=:8080 \
+    TZ=Asia/Shanghai
+
+USER 10001:10001
+EXPOSE 8080
+
+# /healthz 只看进程活着没有，不查数据库：数据库挂了不该让 Docker 把应用标成 unhealthy 反复重启
+# busybox wget 自带，不用额外装 curl
+HEALTHCHECK --interval=10s --timeout=3s --start-period=10s --retries=3 \
+    CMD wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1
+
+# exec 形式的 ENTRYPOINT：mall-api 是 1 号进程，docker stop 发的 SIGTERM 直接到它，能优雅退出
+ENTRYPOINT ["/usr/local/bin/mall-api"]

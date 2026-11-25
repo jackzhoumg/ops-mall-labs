@@ -1,0 +1,25 @@
+{
+  "version": "4",
+  "groupKey": "{}/{severity=\"critical\"}:{alertname=\"MallApiHighErrorRate\", namespace=\"mall\", severity=\"critical\"}",
+  "truncatedAlerts": 0,
+  "status": "firing",
+  "receiver": "oncall-p1",
+  "groupLabels": {"alertname": "MallApiHighErrorRate", "namespace": "mall", "severity": "critical"},
+  "commonLabels": {"alertname": "MallApiHighErrorRate", "job": "mall-api", "namespace": "mall", "severity": "critical"},
+  "commonAnnotations": {},
+  "externalURL": "http://127.0.0.1:9093",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {"alertname": "MallApiHighErrorRate", "job": "mall-api", "namespace": "mall", "severity": "critical"},
+      "annotations": {
+        "summary": "mall mall-api 5xx 错误率 32.5%",
+        "description": "最近 5 分钟 5xx 比例超过 5%，已持续 2 分钟。先看最近有没有发布，再看 MySQL / Redis。"
+      },
+      "startsAt": "2026-11-24T08:01:30.123456789Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus.lab.local/graph?g0.expr=...",
+      "fingerprint": "3b9e0a1c2d4f5e6a"
+    }
+  ]
+}

@@ -1,0 +1,54 @@
+# kubeadm init 配置（kubeadm.k8s.io/v1beta4，kubeadm v1.31 起可用）
+# 用法（k8s-master 上）：
+#   sudo kubeadm config validate --config kubeadm-config.yaml
+#   sudo kubeadm config images pull --config kubeadm-config.yaml
+#   sudo kubeadm init --config kubeadm-config.yaml --upload-certs
+# 写作时 v1.35 最新补丁是 v1.35.10，按 dnf list --showduplicates kubeadm 的结果改
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: InitConfiguration
+localAPIEndpoint:
+  # 本机 Host-Only 网卡的 IP；不写会用默认路由那块网卡（VirtualBox 下是 NAT 的 10.0.2.15）
+  advertiseAddress: 192.168.56.21
+  bindPort: 6443
+nodeRegistration:
+  name: k8s-master
+  criSocket: unix:///run/containerd/containerd.sock
+  kubeletExtraArgs:
+    - name: node-ip
+      value: 192.168.56.21
+  # 控制平面默认带 NoSchedule 污点，业务 Pod 不调度上来，保持默认
+---
+apiVersion: kubeadm.k8s.io/v1beta4
+kind: ClusterConfiguration
+clusterName: ops-mall-lab
+kubernetesVersion: v1.35.10
+# 用域名不用 IP：以后加第二、三台控制平面或者前面放负载均衡，只改 hosts / DNS，不用重签证书
+controlPlaneEndpoint: k8s-api.lab.local:6443
+# 国内拉不到 registry.k8s.io，换成阿里云同步的镜像
+imageRepository: registry.aliyuncs.com/google_containers
+networking:
+  # 必须和 calico/custom-resources.yaml 里 ipPools.cidr 一致，且不能和节点网段 192.168.56.0/24 重叠
+  podSubnet: 10.244.0.0/16
+  # 默认值，集群 DNS 会是 10.96.0.10（后面 mall-web 的 NGINX_RESOLVER 用到）
+  serviceSubnet: 10.96.0.0/12
+  dnsDomain: cluster.local
+apiServer:
+  certSANs:
+    - k8s-api.lab.local
+    - k8s-master
+    - 192.168.56.21
+etcd:
+  local:
+    dataDir: /var/lib/etcd
+---
+apiVersion: kubelet.config.k8s.io/v1beta1
+kind: KubeletConfiguration
+# 和 containerd 的 SystemdCgroup = true 对应（kubeadm 默认也是 systemd，这里写明）
+cgroupDriver: systemd
+# 证书快到期时 kubelet 自动轮换自己的客户端证书
+rotateCertificates: true
+---
+apiVersion: kubeproxy.config.k8s.io/v1alpha1
+kind: KubeProxyConfiguration
+# 实验保持 iptables 模式；规模大了再考虑 ipvs 或 nftables
+mode: iptables

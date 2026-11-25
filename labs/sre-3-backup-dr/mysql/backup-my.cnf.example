@@ -1,0 +1,7 @@
+# 备份账号的连接配置，复制到 /etc/mall-backup/my.cnf，权限 600：
+#   sudo install -m 600 mysql/backup-my.cnf.example /etc/mall-backup/my.cnf
+# 账号由 mysql/backup-user.sql 创建，密码换成你自己设的。
+[client]
+user=backup
+password=ChangeMe-Backup-123
+socket=/var/lib/mysql/mysql.sock

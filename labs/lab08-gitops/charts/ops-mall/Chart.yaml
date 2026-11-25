@@ -1,0 +1,13 @@
+apiVersion: v2
+name: ops-mall
+description: ops-mall 商城（mall-api + mall-web）的 Helm Chart，Lab 08 多环境发布用
+type: application
+# Chart 自身的版本，模板有改动就加一
+version: 0.1.0
+# 默认应用版本，实际发布的镜像 tag 由 values-<env>.yaml 里的 image.tag 决定
+appVersion: "v1.0.0"
+keywords:
+  - ops-mall
+  - devops-lab
+maintainers:
+  - name: ops-class

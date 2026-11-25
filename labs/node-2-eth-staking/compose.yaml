@@ -1,0 +1,129 @@
+# Node-2：Hoodi 测试网质押节点 = 执行层 Geth + 共识层 Lighthouse bn + 验证者 Lighthouse vc + MEV-Boost
+#
+# 启动顺序（很重要）：
+#   1) docker compose up -d                       只起 geth、beacon、mev-boost，先等同步完成
+#   2) bash scripts/import-keys.sh                导入验证者密钥（validator 服务此时不能在运行）
+#   3) docker compose --profile validator up -d   再起验证者客户端
+# validator 服务放在 profile 里，就是为了防止"还没导入密钥 / 还没确认旧机器停掉"就被一起拉起来。
+#
+# 同一套验证者密钥，任何时刻只能有一个 validator 在运行。迁移机器前先读 docs/migration-checklist.md。
+name: eth-staking
+
+services:
+  geth:
+    image: ${GETH_IMAGE:-ethereum/client-go:v1.17.10}
+    container_name: geth
+    restart: unless-stopped
+    stop_grace_period: 5m
+    stop_signal: SIGINT
+    command:
+      - --hoodi
+      - --datadir=/data
+      - --syncmode=snap
+      - --cache=4096
+      # 质押节点不对外提供 RPC，HTTP 只给本机排查用
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.api=eth,net,web3
+      - --http.vhosts=*
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8551
+      - --authrpc.vhosts=*
+      - --authrpc.jwtsecret=/jwt/jwt.hex
+      - --metrics
+      - --metrics.addr=0.0.0.0
+      - --metrics.port=6060
+      - --port=30303
+      - --datadir.minfreedisk=20480
+      - --log.format=json
+    ports:
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+      - "127.0.0.1:8545:8545"
+      - "${METRICS_BIND:-127.0.0.1}:6060:6060"
+    volumes:
+      - ${DATA_DIR:-/data/eth}/geth:/data
+      - ${DATA_DIR:-/data/eth}/jwt:/jwt:ro
+
+  beacon:
+    image: ${LIGHTHOUSE_IMAGE:-sigp/lighthouse:v8.3.3}
+    container_name: lighthouse-bn
+    restart: unless-stopped
+    stop_grace_period: 2m
+    depends_on:
+      - geth
+      - mev-boost
+    command:
+      - lighthouse
+      - bn
+      - --network=hoodi
+      - --datadir=/data
+      - --execution-endpoint=http://geth:8551
+      - --execution-jwt=/jwt/jwt.hex
+      - --checkpoint-sync-url=${CHECKPOINT_SYNC_URL:-https://hoodi.checkpoint.sigp.io}
+      - --http
+      - --http-address=0.0.0.0
+      - --http-port=5052
+      # 出块时向 MEV-Boost 要区块；MEV-Boost 或中继出问题会自动回退到本地 Geth 出块
+      - --builder=http://mev-boost:18550
+      # 兜底的手续费接收地址（vc 里也配，vc 的优先）
+      - --suggested-fee-recipient=${FEE_RECIPIENT:?请在 .env 里设置 FEE_RECIPIENT}
+      # 自动监控连接到本节点的验证者，产生 validator_monitor_* 指标（见 monitoring/）
+      - --validator-monitor-auto
+      - --metrics
+      - --metrics-address=0.0.0.0
+      - --metrics-port=5054
+      - --port=9000
+      - --target-peers=80
+    ports:
+      - "9000:9000/tcp"
+      - "9000:9000/udp"
+      - "9001:9001/udp"
+      - "127.0.0.1:5052:5052"
+      - "${METRICS_BIND:-127.0.0.1}:5054:5054"
+    volumes:
+      - ${DATA_DIR:-/data/eth}/lighthouse:/data
+      - ${DATA_DIR:-/data/eth}/jwt:/jwt:ro
+
+  mev-boost:
+    image: ${MEV_BOOST_IMAGE:-flashbots/mev-boost:1.12}
+    container_name: mev-boost
+    restart: unless-stopped
+    command:
+      - -hoodi
+      - -addr=0.0.0.0:18550
+      - -relay-check
+      - -relays=${MEV_RELAYS:?请在 .env 里设置 MEV_RELAYS}
+      - -json
+    # 不映射端口：只有 compose 内部的 beacon 访问
+
+  validator:
+    image: ${LIGHTHOUSE_IMAGE:-sigp/lighthouse:v8.3.3}
+    container_name: lighthouse-vc
+    profiles: ["validator"]
+    restart: unless-stopped
+    stop_grace_period: 1m
+    depends_on:
+      - beacon
+    command:
+      - lighthouse
+      - vc
+      - --network=hoodi
+      - --datadir=/data
+      - --beacon-nodes=http://beacon:5052
+      - --suggested-fee-recipient=${FEE_RECIPIENT:?请在 .env 里设置 FEE_RECIPIENT}
+      - --graffiti=${GRAFFITI:-ops-class-lab}
+      # 出块时使用 MEV-Boost 的区块（需要 beacon 配了 --builder）
+      - --builder-proposals
+      # 重复运行检测（doppelganger）：启动后先观察 3 个 epoch（约 20 分钟）不签名，
+      # 期间网络上发现同一个密钥在签名就退出。代价是每次重启少拿约 20 分钟的奖励，换来"迁移时手滑"不被罚没，值得
+      - --enable-doppelganger-protection
+      - --metrics
+      - --metrics-address=0.0.0.0
+      - --metrics-port=5064
+      # 注意：这里绝对不要加 --init-slashing-protection
+    ports:
+      - "${METRICS_BIND:-127.0.0.1}:5064:5064"
+    volumes:
+      - ${VC_DATA_DIR:-/data/eth/validator}:/data

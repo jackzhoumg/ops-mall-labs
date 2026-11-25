@@ -1,0 +1,49 @@
+# mall-web 换成非 root 镜像并加固。镜像先按 Dockerfile.web-nonroot 构建推送到 Harbor。
+# 用法：
+#   kubectl -n mall patch deployment mall-web --patch-file mall-web-hardening-patch.yaml
+#   kubectl -n mall patch service mall-web -p '{"spec":{"ports":[{"port":80,"targetPort":8080}]}}'
+# Service 对外端口仍然是 80，网关（HTTPRoute）不用改；只是转发到容器的 8080。
+# 前提：容器名是 mall-web。Lab 06 的探针如果写的是 port: 80，这里一并改成 8080。
+spec:
+  template:
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: mall-web
+          image: harbor.lab.local/mall/mall-web:v1.0.0-nonroot
+          # 原来的端口叫 http、是 80。strategic merge 默认按 containerPort 合并列表，会多出一个同名端口导致报错，
+          # 所以用 $patch: replace 整个替换端口列表。Service 的 targetPort 如果写的是 http（端口名），会自动跟着变成 8080
+          ports:
+            - $patch: replace
+            - name: http
+              containerPort: 8080
+          readinessProbe:
+            httpGet:
+              path: /nginx-health
+              port: 8080
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /nginx-health
+              port: 8080
+            periodSeconds: 10
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            privileged: false
+            capabilities:
+              drop: ["ALL"]
+          # unprivileged 镜像把 pid 文件和各种临时目录都放在 /tmp
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir:
+            sizeLimit: 64Mi

@@ -1,0 +1,21 @@
+# 实验 1：随机杀掉 1 个 mall-api Pod
+# 稳态假设：mall-api 至少 2 副本，杀掉 1 个后 1 分钟内，/api/products 成功率 >= 99%，Deployment 自动补齐副本。
+# 爆炸半径：mode: one，只杀 1 个；只选 mall 命名空间里 mall-api 的 Pod。
+apiVersion: chaos-mesh.org/v1alpha1
+kind: PodChaos
+metadata:
+  name: mall-api-pod-kill
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+    chaos.lab/drill: "sre-4"
+spec:
+  action: pod-kill
+  mode: one
+  selector:
+    namespaces:
+      - mall
+    labelSelectors:
+      app.kubernetes.io/name: mall-api
+  # pod-kill 是一次性动作，gracePeriod=0 相当于 kill -9，不给优雅退出的机会
+  gracePeriod: 0

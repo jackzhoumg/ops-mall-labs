@@ -1,0 +1,4 @@
+# Dockerfile.api.fat 专用的 ignore 文件，规则同 Dockerfile.api.dockerignore
+*
+!app/
+app/mall-api

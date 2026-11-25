@@ -1,0 +1,10 @@
+# /etc/yum.repos.d/mysql84-community.repo（lab-db1、lab-db2）
+# MySQL 8.4 LTS 官方社区版，清华镜像。和 Lab 03 roles/mysql/tasks/install.yml 里的仓库一致
+# $basearch 由 dnf 自动替换成 x86_64 或 aarch64（Apple Silicon 虚拟机）
+# 境外机器可以把 baseurl 换成 https://repo.mysql.com/yum/mysql-8.4-community/el/9/$basearch/
+[mysql84-community]
+name=MySQL 8.4 LTS Community Server
+baseurl=https://mirrors.tuna.tsinghua.edu.cn/mysql/yum/mysql-8.4-community-el9-$basearch/
+enabled=1
+gpgcheck=1
+gpgkey=https://repo.mysql.com/RPM-GPG-KEY-mysql-2023

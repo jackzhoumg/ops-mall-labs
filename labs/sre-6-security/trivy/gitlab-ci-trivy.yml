@@ -1,0 +1,31 @@
+# 把这个 job 加进 Lab 07 的 .gitlab-ci.yml：放在 build 之后、deploy 之前。
+# 镜像有可修复的 HIGH / CRITICAL 漏洞时 job 失败，后面的部署阶段不会执行。
+# 写作时 Trivy 版本 0.76.2。国内拉不到 Docker Hub / GHCR 时，先把 aquasec/trivy 镜像同步到 Harbor。
+image-scan:
+  stage: scan
+  image:
+    name: harbor.lab.local/library/trivy:0.76.2
+    entrypoint: [""]
+  variables:
+    # 漏洞库缓存到 CI 缓存目录，避免每次都下载
+    TRIVY_CACHE_DIR: .trivycache/
+    TRIVY_NO_PROGRESS: "true"
+    # Harbor 用的是自签 CA（Lab 04），把 CA 证书放进 CI 变量 HARBOR_CA（File 类型）
+    SSL_CERT_FILE: ${HARBOR_CA}
+    TRIVY_USERNAME: ${HARBOR_USER}
+    TRIVY_PASSWORD: ${HARBOR_PASSWORD}
+  script:
+    - IMAGE="harbor.lab.local/mall/mall-api:${CI_COMMIT_SHORT_SHA}"
+    # 第一步：完整报告留档，不阻断
+    - trivy image --scanners vuln --format json --output trivy-report.json "$IMAGE"
+    # 第二步：闸门。只看有修复版本的 HIGH / CRITICAL
+    - trivy image --scanners vuln --severity HIGH,CRITICAL --ignore-unfixed --exit-code 1 "$IMAGE"
+  cache:
+    key: trivy-db
+    paths:
+      - .trivycache/
+  artifacts:
+    when: always
+    paths:
+      - trivy-report.json
+    expire_in: 30 days

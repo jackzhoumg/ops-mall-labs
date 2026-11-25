@@ -1,0 +1,93 @@
+# Lab 10：基于日志的告警（Loki Ruler）
+# 用法（k8s-master）：kubectl apply -f rules/loki-alert-rules.yaml
+#
+# 带 loki_rule=1 标签的 ConfigMap 会被 Loki 的 rules sidecar 写进 /rules/<租户>/，
+# 租户由注解 loki_rule_tenant 决定。规则里的查询只能查到这个租户的日志。
+# 告警发到 Lab 09 的 Alertmanager，按 severity 走同一套路由、分组、抑制，最后推到企业微信 / 钉钉。
+#
+# 什么时候用日志告警：指标里没有、只在日志里出现的信号，比如某种错误关键字、MySQL 错误日志、慢查询条数。
+# 能用指标就用指标：日志告警每次评估都要扫一遍日志，比查指标贵得多。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-rules-mall
+  namespace: logging
+  labels:
+    loki_rule: "1"
+  annotations:
+    loki_rule_tenant: mall
+data:
+  mall-log-alerts.yaml: |
+    groups:
+      - name: mall-log-alerts
+        interval: 1m
+        rules:
+          # mall-api 的 ERROR 级别日志：/api/debug/error 每次都会写一条 "debug error triggered"
+          - alert: MallApiErrorLogBurst
+            expr: |
+              sum by (namespace) (
+                count_over_time({namespace=~"mall|mall-staging|mall-prod", app="mall-api"} | json | level="ERROR" [5m])
+              ) > 20
+            for: 2m
+            labels:
+              severity: warning
+              source: loki
+            annotations:
+              summary: "{{ $labels.namespace }} mall-api 5 分钟内 ERROR 日志 {{ $value }} 条"
+              description: "在 Grafana Explore 用 {namespace=\"{{ $labels.namespace }}\", app=\"mall-api\"} | json | level=\"ERROR\" 查看具体错误。"
+
+          # 访问日志里的慢请求（duration_ms 是 mall-api 访问日志的字段，单位毫秒）
+          - alert: MallApiSlowRequestLogs
+            expr: |
+              sum by (namespace) (
+                count_over_time({namespace=~"mall|mall-staging|mall-prod", app="mall-api"} | json | msg="access" | duration_ms > 1000 [5m])
+              ) > 10
+            for: 2m
+            labels:
+              severity: warning
+              source: loki
+            annotations:
+              summary: "{{ $labels.namespace }} mall-api 5 分钟内超过 1 秒的请求 {{ $value }} 个"
+              description: "在 Grafana Explore 用 | json | duration_ms > 1000 过滤，按 route 和 request_id 定位慢接口。"
+
+          # 虚拟机 Nginx 访问日志里的 5xx
+          - alert: NginxHigh5xx
+            expr: |
+              sum by (host) (
+                count_over_time({job="nginx", log_type="access"} | json | status >= 500 [5m])
+              ) > 20
+            for: 2m
+            labels:
+              severity: warning
+              source: loki
+            annotations:
+              summary: "{{ $labels.host }} Nginx 5 分钟内 5xx {{ $value }} 次"
+              description: "看 upstream_status 和 upstream_addr，判断是后端 mall-api 报错还是连不上后端（502/504）。"
+
+          # MySQL 慢查询突然变多，一般是新上线的 SQL 没走索引
+          - alert: MysqlSlowQueryBurst
+            expr: |
+              sum by (host) (
+                count_over_time({job="mysql-slow"} |= "# Query_time" [10m])
+              ) > 10
+            for: 0m
+            labels:
+              severity: warning
+              source: loki
+            annotations:
+              summary: "{{ $labels.host }} 10 分钟内慢查询 {{ $value }} 条"
+              description: "在 Grafana 用 {job=\"mysql-slow\"} 查看语句，按 Rows_examined 排查是否全表扫描。"
+
+          # MySQL 错误日志出现 [ERROR]：磁盘满、复制出错、崩溃恢复都会写这里
+          - alert: MysqlErrorLog
+            expr: |
+              sum by (host) (
+                count_over_time({job="mysql-error"} |= "[ERROR]" [5m])
+              ) > 0
+            for: 0m
+            labels:
+              severity: warning
+              source: loki
+            annotations:
+              summary: "{{ $labels.host }} MySQL 错误日志出现 ERROR"
+              description: "到 Grafana 用 {job=\"mysql-error\"} |= \"[ERROR]\" 查看原文。"

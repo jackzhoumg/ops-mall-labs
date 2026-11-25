@@ -1,0 +1,48 @@
+# API Server 审计策略（修复 kube-bench 1.2.16-1.2.19，也是 CKS 必考点）
+# 放到 k8s-master 的 /etc/kubernetes/audit/policy.yaml，再按教程修改 kube-apiserver.yaml。
+# 规则从上往下匹配，命中第一条就停，所以“不记录”的规则放最前面，兜底规则放最后。
+apiVersion: audit.k8s.io/v1
+kind: Policy
+omitStages:
+  - RequestReceived
+rules:
+  # 1. 高频、无价值的请求不记，否则日志量爆炸
+  - level: None
+    users: ["system:kube-proxy"]
+    verbs: ["watch"]
+  - level: None
+    nonResourceURLs: ["/healthz*", "/readyz*", "/livez*", "/version", "/metrics"]
+  - level: None
+    resources:
+      - group: "coordination.k8s.io"
+        resources: ["leases"]
+  - level: None
+    resources:
+      - group: ""
+        resources: ["events"]
+
+  # 2. Secret / ConfigMap 只记元数据：谁、什么时候、读了哪个。不记内容，否则审计日志本身就泄密了
+  - level: Metadata
+    resources:
+      - group: ""
+        resources: ["secrets", "configmaps", "serviceaccounts/token"]
+
+  # 3. 进容器、端口转发：记完整请求，事后能查到谁在哪个 Pod 里执行了什么
+  - level: Request
+    resources:
+      - group: ""
+        resources: ["pods/exec", "pods/attach", "pods/portforward"]
+
+  # 4. 权限变更：记完整请求和响应
+  - level: RequestResponse
+    verbs: ["create", "update", "patch", "delete"]
+    resources:
+      - group: "rbac.authorization.k8s.io"
+        resources: ["roles", "rolebindings", "clusterroles", "clusterrolebindings"]
+
+  # 5. 其余写操作记请求体
+  - level: Request
+    verbs: ["create", "update", "patch", "delete", "deletecollection"]
+
+  # 6. 兜底：读操作只记元数据
+  - level: Metadata

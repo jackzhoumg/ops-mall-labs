@@ -1,0 +1,35 @@
+# 给 Envoy Gateway 的数据面（Envoy 代理）打开 OpenTelemetry 链路追踪。
+# 写作时版本：Envoy Gateway v1.10.0，配置方式见
+# https://gateway.envoyproxy.io/docs/tasks/observability/proxy-trace/ ，以官方最新文档为准。
+#
+# 注意：
+# 1. EnvoyProxy 必须和引用它的 Gateway 在同一个命名空间。Lab 06 的共享 Gateway 叫 lab-gateway，
+#    在 envoy-gateway-system；你的不一样就改 metadata.namespace（kubectl get gateway -A 查）。
+# 2. 如果你的 Gateway 已经引用了别的 EnvoyProxy（Lab 06 里改过副本数、Service 类型等），
+#    不要新建这个，把下面 spec.telemetry 整段合并进已有的 EnvoyProxy。
+# 3. 改完后 Envoy Pod 会滚动重启，实验环境无所谓，生产环境挑低峰做。
+#
+# 用法（k8s-master）：kubectl apply -f tracing/envoyproxy-tracing.yaml
+apiVersion: gateway.envoyproxy.io/v1alpha1
+kind: EnvoyProxy
+metadata:
+  name: mall-proxy-tracing
+  namespace: envoy-gateway-system
+spec:
+  telemetry:
+    tracing:
+      # 实验环境 100% 采样，方便每个请求都能查到。
+      # 生产环境一般 1%~10%，或者在 Collector 里做尾部采样（只留慢请求和错误请求）。
+      samplingRate: 100
+      provider:
+        type: OpenTelemetry
+        backendRefs:
+          - name: otel-collector
+            namespace: monitoring
+            port: 4317
+      tags:
+        # 把请求 ID 记到 span 上。Envoy 会给每个请求生成 x-request-id 并转发给后端，
+        # mall-api 直接沿用这个值写进访问日志的 request_id 字段，链路和日志就对上了。
+        request_id: "%REQUEST_HEADER(X-REQUEST-ID)%"
+        k8s.pod.name: "%ENVIRONMENT(ENVOY_POD_NAME)%"
+        k8s.namespace.name: "%ENVIRONMENT(ENVOY_POD_NAMESPACE)%"

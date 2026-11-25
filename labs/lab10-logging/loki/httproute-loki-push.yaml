@@ -1,0 +1,27 @@
+# Lab 10：让虚拟机上的 Fluent Bit 能把日志推进 K8s 里的 Loki
+# 只放行写入接口 /loki/api/v1/push，查询接口不对外。查询一律走 Grafana。
+# 课程约定的域名表里没有 loki.lab.local，这是本实验新增的，同样指向网关 192.168.56.200。
+# 虚拟机 hosts 里加：192.168.56.200  loki.lab.local
+#
+# 生产环境还要在网关或 loki-gateway 上开 Basic Auth（loki.tenants / gateway.basicAuth），
+# 否则同网段任何机器都能冒充任意租户写日志。
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: loki-push
+  namespace: logging
+spec:
+  parentRefs:
+    - name: lab-gateway
+      namespace: envoy-gateway-system
+  hostnames:
+    - loki.lab.local
+  rules:
+    - matches:
+        - path:
+            type: Exact
+            value: /loki/api/v1/push
+          method: POST
+      backendRefs:
+        - name: loki-gateway
+          port: 80

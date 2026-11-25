@@ -1,0 +1,50 @@
+# 一条命令部署 Lab 02 的整套商城环境：
+#   ansible-playbook site.yml --ask-vault-pass
+# 只更新某一部分：
+#   ansible-playbook site.yml --ask-vault-pass --tags mall_api -e mall_version=v1.0.1
+# 先看会改什么、不真改：
+#   ansible-playbook site.yml --ask-vault-pass --check --diff
+
+- name: 所有机器基础配置
+  hosts: mall
+  become: true
+  roles:
+    - role: common
+      tags: [common]
+
+- name: MySQL 主库
+  hosts: db_primary
+  become: true
+  roles:
+    - role: mysql
+      tags: [mysql]
+
+- name: Redis
+  hosts: redis
+  become: true
+  roles:
+    - role: redis
+      tags: [redis]
+
+# 从库放在主库之后：主库的库、表、账号建好了，从库通过复制同步过来
+- name: MySQL 从库
+  hosts: db_replica
+  become: true
+  roles:
+    - role: mysql
+      tags: [mysql]
+
+# serial: 1 一台一台部署，mall_api 角色里等 /readyz 通过才继续下一台，
+# 任何一台失败（max_fail_percentage: 0）整个 play 立刻停，另一台还在正常服务
+- name: Web：mall-api + Nginx + Keepalived
+  hosts: web
+  become: true
+  serial: 1
+  max_fail_percentage: 0
+  roles:
+    - role: mall_api
+      tags: [mall_api]
+    - role: nginx
+      tags: [nginx]
+    - role: keepalived
+      tags: [keepalived]

@@ -1,0 +1,43 @@
+# Lab 10（选做）：EFK 精简版的 Elasticsearch，单节点，由 ECK Operator 管理
+# 写作时版本：ECK 3.5.0，Elasticsearch 9.5.7。以官方最新文档为准。
+#
+# 内存需求：Elasticsearch 容器 2Gi（JVM 堆自动取一半，约 1Gi），Kibana 1Gi，ECK Operator 约 150Mi。
+# 3 台 2C4G 的实验集群装了 Lab 09 的监控和 Loki 后，剩余内存不一定够，Pod 会卡在 Pending。
+# 办法：临时把 Loki 缩到 0（kubectl -n logging scale sts loki --replicas=0），或临时加一台 4C8G 按量云服务器做工作节点。
+apiVersion: elasticsearch.k8s.elastic.co/v1
+kind: Elasticsearch
+metadata:
+  name: mall-logs
+  namespace: logging
+spec:
+  version: 9.5.7
+  http:
+    tls:
+      selfSignedCertificate:
+        # 实验里关掉 HTTP 层 TLS，Fluent Bit 和 Kibana 直接用 http 连。
+        # 节点之间的传输层 TLS 仍然由 ECK 自动开启。生产环境不要关。
+        disabled: true
+  nodeSets:
+    - name: default
+      count: 1
+      config:
+        # 不用 mmap，就不需要改宿主机的 vm.max_map_count，代价是性能差一些，实验够用
+        node.store.allow_mmap: false
+      podTemplate:
+        spec:
+          containers:
+            - name: elasticsearch
+              resources:
+                requests:
+                  cpu: 500m
+                  memory: 2Gi
+                limits:
+                  memory: 2Gi
+      volumeClaimTemplates:
+        - metadata:
+            name: elasticsearch-data
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 10Gi

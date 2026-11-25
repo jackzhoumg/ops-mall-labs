@@ -1,0 +1,54 @@
+# 另一种写法：一个 ApplicationSet 生成两个环境的 Application（与 app-staging.yaml / app-prod.yaml 二选一）
+# 环境多了（比如 10 个城市站点）时用它，少写重复的 YAML
+# kubectl apply -f labs/lab08-gitops/argocd/applicationset.yaml
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: ops-mall
+  namespace: argocd
+spec:
+  goTemplate: true
+  goTemplateOptions: ["missingkey=error"]
+  generators:
+    - list:
+        elements:
+          - env: staging
+            autoSync: true
+          - env: prod
+            autoSync: false
+  template:
+    metadata:
+      name: "ops-mall-{{.env}}"
+      labels:
+        app.kubernetes.io/part-of: ops-mall
+    spec:
+      project: ops-mall
+      source:
+        repoURL: http://gitlab.lab.local/ops/ops-mall-labs.git
+        targetRevision: main
+        path: labs/lab08-gitops/charts/ops-mall
+        helm:
+          releaseName: ops-mall
+          valueFiles:
+            - "values-{{.env}}.yaml"
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: "mall-{{.env}}"
+      ignoreDifferences:
+        - group: gateway.networking.k8s.io
+          kind: HTTPRoute
+          name: mall-api
+          jqPathExpressions:
+            - .spec.rules[].backendRefs[].weight
+      syncPolicy:
+        syncOptions:
+          - RespectIgnoreDifferences=true
+  # 只有 autoSync=true 的环境打开自动同步
+  templatePatch: |
+    {{- if .autoSync }}
+    spec:
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+    {{- end }}

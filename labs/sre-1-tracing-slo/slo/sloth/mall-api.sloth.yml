@@ -1,0 +1,59 @@
+# 用 Sloth 生成 SLO 规则（和 rules/mall-api-slo.rules.yml 手写版二选一，不要同时加载）。
+# 写作时版本：Sloth v0.16.0，规范见 https://sloth.dev/specs/default/ ，以官方最新文档为准。
+#
+# 生成（任意装了 sloth 的机器）：
+#   sloth generate -i slo/sloth/mall-api.sloth.yml -o slo/sloth/generated/mall-api.rules.yml
+# 默认 30 天窗口；想用 28 天加 --default-slo-period=28d。
+version: "prometheus/v1"
+service: "mall-api"
+labels:
+  owner: "ops-team"
+  tier: "1"
+slos:
+  - name: "requests-availability"
+    objective: 99.9
+    description: "mall-api 业务接口（/api/）非 5xx 的比例"
+    sli:
+      events:
+        # 加 or vector(0)：没出过 5xx 时分子没有时间序列，不加的话 SLI 显示“没数据”
+        error_query: (sum(rate(mall_http_requests_total{job="mall-api",namespace="mall",route=~".* /api/.*",status=~"5.."}[{{.window}}])) or vector(0))
+        total_query: sum(rate(mall_http_requests_total{job="mall-api",namespace="mall",route=~".* /api/.*"}[{{.window}}]))
+    alerting:
+      name: MallApiAvailabilityBudgetBurn
+      labels:
+        category: "availability"
+      annotations:
+        summary: "mall-api 可用性错误预算消耗过快"
+      page_alert:
+        labels:
+          severity: critical
+          notify: page
+      ticket_alert:
+        labels:
+          severity: warning
+          notify: ticket
+
+  - name: "requests-latency"
+    objective: 99
+    description: "mall-api 业务接口（/api/）500ms 内完成的比例"
+    sli:
+      events:
+        error_query: |
+          sum(rate(mall_http_request_duration_seconds_count{job="mall-api",namespace="mall",route=~".* /api/.*"}[{{.window}}]))
+          -
+          sum(rate(mall_http_request_duration_seconds_bucket{job="mall-api",namespace="mall",route=~".* /api/.*",le="0.5"}[{{.window}}]))
+        total_query: sum(rate(mall_http_request_duration_seconds_count{job="mall-api",namespace="mall",route=~".* /api/.*"}[{{.window}}]))
+    alerting:
+      name: MallApiLatencyBudgetBurn
+      labels:
+        category: "latency"
+      annotations:
+        summary: "mall-api 延迟错误预算消耗过快"
+      page_alert:
+        labels:
+          severity: critical
+          notify: page
+      ticket_alert:
+        labels:
+          severity: warning
+          notify: ticket

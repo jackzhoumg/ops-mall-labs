@@ -1,0 +1,19 @@
+# Lab 09：把大盘 JSON 打包成带 grafana_dashboard=1 标签的 ConfigMap
+# 用法（k8s-master）：kubectl apply -k dashboards/
+# Grafana 的 sidecar 容器监听所有命名空间里带这个标签的 ConfigMap，发现后写进 Grafana 并重新加载，
+# 改 JSON 后再 apply 一次，大约 1 分钟内生效，不用重启 Grafana。
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+namespace: monitoring
+generatorOptions:
+  # 不加哈希后缀，ConfigMap 名字固定，方便 kubectl get 查看
+  disableNameSuffixHash: true
+  labels:
+    grafana_dashboard: "1"
+  annotations:
+    # 配合 values 里的 folderAnnotation，大盘会出现在 Grafana 的 ops-mall 文件夹
+    grafana_folder: ops-mall
+configMapGenerator:
+  - name: ops-mall-overview-dashboard
+    files:
+      - ops-mall-overview.json

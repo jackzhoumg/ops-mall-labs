@@ -1,0 +1,13 @@
+# 第 0 条：mall 命名空间默认拒绝所有入站和出站流量。
+# 先 apply 这条，商城会立刻不可用；接着 apply 01-05 逐条放行。生产环境要先把放行规则准备好再一起上。
+# 注意：Kubernetes NetworkPolicy 是“白名单叠加”，只要有一条策略放行就通，没有“拒绝”规则。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: mall
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress

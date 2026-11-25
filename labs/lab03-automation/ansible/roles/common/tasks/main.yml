@@ -1,0 +1,93 @@
+- name: 只支持 Rocky Linux / RHEL 9 系
+  ansible.builtin.assert:
+    that:
+      - ansible_facts['os_family'] == 'RedHat'
+      - ansible_facts['distribution_major_version'] == '9'
+    fail_msg: "本角色按 Rocky Linux 9 编写，当前是 {{ ansible_facts['distribution'] }} {{ ansible_facts['distribution_version'] }}"
+
+- name: 设置主机名
+  ansible.builtin.hostname:
+    name: "{{ inventory_hostname }}"
+
+- name: 写入实验环境 hosts
+  ansible.builtin.blockinfile:
+    path: /etc/hosts
+    marker: "# {mark} ops-mall lab hosts (managed by ansible)"
+    block: |
+      {% for h in lab_hosts %}
+      {{ h.ip }} {{ h.names }}
+      {% endfor %}
+
+- name: 设置时区
+  community.general.timezone:
+    name: "{{ lab_timezone }}"
+
+- name: 安装基础软件包
+  ansible.builtin.dnf:
+    name: "{{ common_packages }}"
+    state: present
+
+- name: 启动基础服务
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    state: started
+    enabled: true
+  loop:
+    - chronyd
+    - crond
+    - firewalld
+
+- name: 内核参数
+  ansible.posix.sysctl:
+    name: "{{ item.key }}"
+    value: "{{ item.value }}"
+    sysctl_file: /etc/sysctl.d/90-ops-mall.conf
+    state: present
+  loop: "{{ common_sysctl | dict2items }}"
+
+- name: 运维目录
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+  loop:
+    - /etc/ops
+    - /var/log/ops
+
+- name: 运维脚本日志轮转（不加的话 /var/log/ops 会一直涨）
+  ansible.builtin.copy:
+    dest: /etc/logrotate.d/ops
+    content: |
+      /var/log/ops/*.log {
+          weekly
+          rotate 8
+          compress
+          missingok
+          notifempty
+      }
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: 部署运维脚本
+  ansible.builtin.copy:
+    src: "{{ scripts_src }}/{{ item }}"
+    dest: "/usr/local/bin/{{ item }}"
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - inspect.sh
+    - nginx_log_stats.sh
+
+- name: 巡检定时任务（每 10 分钟）
+  ansible.builtin.cron:
+    name: ops inspect
+    cron_file: ops-inspect
+    user: root
+    minute: "*/10"
+    job: >-
+      SERVICES="{{ inspect_services }}" CERT_FILES="{{ inspect_cert_files }}"
+      /usr/local/bin/inspect.sh >/dev/null 2>&1

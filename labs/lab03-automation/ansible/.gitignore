@@ -1,0 +1,6 @@
+# 不要把真实密码和 vault 密码提交到仓库
+.vault_pass
+collections/
+*.retry
+# 控制节点上生成的自签证书私钥（*.key 已在仓库根 .gitignore 里，这里再写一次防止漏掉）
+files/certs/*.key

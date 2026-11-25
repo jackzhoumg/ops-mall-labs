@@ -1,0 +1,19 @@
+# AIOps-2（可选）：给 alert-analyzer 的 /data 换成持久卷，Pod 重建后分析记录和反馈不丢。
+# 用法：kubectl apply -f k8s/pvc.example.yaml，然后把 deployment.yaml 里 data 卷改成：
+#   - name: data
+#     persistentVolumeClaim:
+#       claimName: alert-analyzer-data
+# 前提：集群有默认 StorageClass（kubectl get sc）。Lab 05 的裸机集群默认没有，可以装 local-path-provisioner 或用 NFS。
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: alert-analyzer-data
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alert-analyzer
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: 1Gi

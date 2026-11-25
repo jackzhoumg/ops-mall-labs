@@ -1,0 +1,11 @@
+# 让 Gateway 引用 EnvoyProxy 配置（只影响这一个 Gateway，不动 GatewayClass）。
+# 用法（k8s-master）：
+#   kubectl -n envoy-gateway-system patch gateway lab-gateway --type merge --patch-file tracing/gateway-infra-patch.yaml
+# 回滚：
+#   kubectl -n envoy-gateway-system patch gateway lab-gateway --type json -p '[{"op":"remove","path":"/spec/infrastructure/parametersRef"}]'
+spec:
+  infrastructure:
+    parametersRef:
+      group: gateway.envoyproxy.io
+      kind: EnvoyProxy
+      name: mall-proxy-tracing

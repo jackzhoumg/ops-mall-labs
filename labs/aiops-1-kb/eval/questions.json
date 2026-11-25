@@ -1,0 +1,13 @@
+[
+  {"question": "商城接口返回 502，Nginx 日志里 Connection refused 怎么办", "expect_source": "runbooks/01-nginx-502.md"},
+  {"question": "从库 Seconds_Behind_Source 一直在涨", "expect_source": "runbooks/02-mysql-replication-lag.md"},
+  {"question": "主从复制报 1062 Duplicate entry 能不能直接跳过", "expect_source": "runbooks/02-mysql-replication-lag.md"},
+  {"question": "mall-api 的 Pod 一直 CrashLoopBackOff", "expect_source": "runbooks/03-pod-crashloopbackoff.md"},
+  {"question": "livenessProbe 应该用 healthz 还是 readyz", "expect_source": "runbooks/03-pod-crashloopbackoff.md"},
+  {"question": "磁盘满了，删了日志 df 还是 100%", "expect_source": "runbooks/04-disk-full.md"},
+  {"question": "binlog 占满磁盘怎么安全清理", "expect_source": "runbooks/04-disk-full.md"},
+  {"question": "Redis 挂了为什么整个商城都 503", "expect_source": "runbooks/05-redis-down-site-503.md"},
+  {"question": "下单接口 P99 延迟很高，怎么找慢在哪里", "expect_source": "runbooks/06-mall-api-high-latency.md"},
+  {"question": "容器 Exit Code 137 OOMKilled 是内存泄漏吗", "expect_source": "runbooks/07-pod-oomkilled.md"},
+  {"question": "秒杀时下单超时，扩容 mall-api 有用吗", "expect_source": "runbooks/postmortems/2026-09-15-下单超时故障复盘.md"}
+]

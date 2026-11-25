@@ -1,0 +1,76 @@
+# Node-2：质押节点告警
+# 指标来源（写作时 Lighthouse v8.3.3 源码中的名字）：
+#   vc：vc_validators_enabled_count、vc_beacon_nodes_synced_count、vc_signed_attestations_total{status}
+#   bn（--validator-monitor-auto 后才有）：validator_monitor_prev_epoch_on_chain_attester_hit / _miss、
+#        validator_monitor_prev_epoch_on_chain_head_attester_miss、validator_monitor_balance_gwei、
+#        validator_monitor_missed_blocks_total，标签 validator（验证者索引或公钥）
+# 一个 epoch = 32 个 slot × 12 秒 = 6.4 分钟
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: eth-staking
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  groups:
+    - name: eth-staking
+      rules:
+        - alert: ValidatorClientDown
+          expr: up{job="eth-validator"} == 0
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} 验证者客户端不可用"
+            description: "vc 挂了，所有验证者都在离线扣分。先看 docker compose logs validator。不要在别的机器上临时拉起同一套密钥！"
+        - alert: ValidatorNoSyncedBeaconNode
+          expr: vc_beacon_nodes_synced_count{job="eth-validator"} == 0
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} vc 没有可用的已同步信标节点"
+            description: "信标节点挂了或正在同步，验证者无法履职。看 Lighthouse bn 和 Geth 的同步状态。"
+        - alert: ValidatorEnabledCountChanged
+          expr: vc_validators_enabled_count{job="eth-validator"} < 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} 启用的验证者数量为 {{ $value }}"
+            description: "密钥没加载（密码没保存、validator_definitions.yml 被改、doppelganger 检测到重复运行后退出）。"
+        # 两个 epoch 里有一次见证没被链上记录到。偶尔一次正常（网络延迟），连续出现就要查
+        - alert: ValidatorMissedAttestations
+          expr: increase(validator_monitor_prev_epoch_on_chain_attester_miss[15m]) >= 2
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "验证者 {{ $labels.validator }} 最近 15 分钟漏了 {{ $value }} 次见证"
+            description: "看 vc 日志有没有 Successfully published attestation；看 bn 对等节点数、和执行层的连接、机器时间是否同步。"
+        - alert: ValidatorMissedBlock
+          expr: increase(validator_monitor_missed_blocks_total[1h]) > 0
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "验证者 {{ $labels.validator }} 错过了出块"
+            description: "轮到出块却没出成。看 bn 日志里 builder / mev-boost 的报错，以及执行层是否同步。"
+        - alert: ValidatorBalanceDecreasing
+          expr: delta(validator_monitor_balance_gwei[1h]) < 0
+          for: 1h
+          labels:
+            severity: warning
+          annotations:
+            summary: "验证者 {{ $labels.validator }} 余额 2 小时内持续下降"
+            description: "正常运行的验证者余额只会涨。持续下降说明一直在离线扣分，或者被罚没了（看浏览器上的 slashed 字段）。"
+        # 签名被 slashing protection 拦截：说明有东西在尝试签"可罚没"的消息。极少见，出现必须人工看
+        - alert: ValidatorSlashableSignatureBlocked
+          expr: increase(vc_signed_attestations_total{status="slashable"}[10m]) > 0 or increase(vc_signed_beacon_blocks_total{status="slashable"}[10m]) > 0
+          for: 0m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} slashing protection 拦截了可罚没的签名"
+            description: "检查是否有第二个 vc 在用同一套密钥、slashing protection 数据库是否被替换过。确认前不要重启 vc。"

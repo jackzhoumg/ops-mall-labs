@@ -1,0 +1,35 @@
+# Node-1：不用 Docker 时，用 systemd 管理 Lighthouse 信标节点
+# 安装：下载 https://github.com/sigp/lighthouse/releases 的 lighthouse-v8.3.3-x86_64-unknown-linux-gnu.tar.gz，
+#   解压后 sudo install -m 0755 lighthouse /usr/local/bin/
+#   sudo mkdir -p /data/eth/lighthouse && sudo chown -R eth:eth /data/eth/lighthouse
+#   sudo cp lighthouse-bn.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now lighthouse-bn
+[Unit]
+Description=Lighthouse beacon node (Node-1)
+Documentation=https://lighthouse-book.sigmaprime.io
+After=network-online.target geth.service
+Wants=network-online.target
+
+[Service]
+User=eth
+Group=eth
+Type=simple
+ExecStart=/usr/local/bin/lighthouse bn \
+  --network hoodi \
+  --datadir /data/eth/lighthouse \
+  --execution-endpoint http://127.0.0.1:8551 \
+  --execution-jwt /data/eth/jwt/jwt.hex \
+  --checkpoint-sync-url https://hoodi.checkpoint.sigp.io \
+  --http --http-address 127.0.0.1 --http-port 5052 \
+  --metrics --metrics-address 192.168.56.31 --metrics-port 5054 \
+  --port 9000 --target-peers 80
+TimeoutStopSec=120
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=1048576
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

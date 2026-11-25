@@ -1,0 +1,25 @@
+# 第 5 条：monitoring 命名空间（Lab 09 的 Prometheus）抓取 mall-api 的 /metrics（8080）。
+# 只放行 Prometheus 的 Pod，不放行整个 monitoring 命名空间（Grafana、Alertmanager 不需要直连 mall-api）。
+# 查标签：kubectl -n monitoring get pods --show-labels | grep prometheus
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-prometheus-scrape
+  namespace: mall
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mall-api
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: monitoring
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: prometheus
+      ports:
+        - protocol: TCP
+          port: 8080

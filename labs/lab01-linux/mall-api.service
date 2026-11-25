@@ -1,0 +1,27 @@
+# /etc/systemd/system/mall-api.service
+# ops-mall 后端 mall-api 的 systemd 服务文件。对应教程：Lab 01 第 5.2 节。
+# 和 Lab 03 Ansible 模板 roles/mall_api/templates/mall-api.service.j2 内容一致。
+[Unit]
+Description=ops-mall API server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=mall
+Group=mall
+EnvironmentFile=/etc/mall-api/mall-api.env
+ExecStart=/opt/mall-api/mall-api
+Restart=on-failure
+RestartSec=3
+# 和 MALL_SHUTDOWN_GRACE（默认 10s）配合：systemctl stop 先发 SIGTERM，超过 15s 才强杀
+TimeoutStopSec=15
+LimitNOFILE=65535
+# 基础加固：不能提权、/usr /boot /etc 只读、看不到 /home
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

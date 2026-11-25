@@ -1,0 +1,151 @@
+{{- $web := .Values.web -}}
+{{- $ctx := dict "root" . "name" $web.name -}}
+{{- if $web.nginxConfig.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $web.name }}-nginx
+  labels:
+    {{- include "ops-mall.labels" $ctx | nindent 4 }}
+data:
+  default.conf: |
+    server {
+        listen {{ $web.containerPort }};
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+
+        location /api/ {
+            proxy_pass http://{{ .Values.api.name }}:{{ .Values.api.containerPort }};
+            proxy_set_header Host $host;
+            proxy_set_header X-Request-ID $request_id;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        }
+
+        location / {
+            try_files $uri $uri/ /index.html;
+        }
+    }
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $web.name }}
+  labels:
+    {{- include "ops-mall.labels" $ctx | nindent 4 }}
+spec:
+  replicas: {{ $web.replicas }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "ops-mall.selectorLabels" $ctx | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        {{- include "ops-mall.podLabels" $ctx | nindent 8 }}
+      {{- if $web.nginxConfig.enabled }}
+      annotations:
+        checksum/nginx: {{ printf "%v%v" .Values.api.name $web.containerPort | sha256sum }}
+      {{- end }}
+    spec:
+      {{- with .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $web.podSecurityContext }}
+      securityContext:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- if $web.spreadAcrossNodes }}
+      {{- include "ops-mall.spread" $ctx | nindent 6 }}
+      {{- end }}
+      containers:
+        - name: {{ $web.name }}
+          image: {{ include "ops-mall.image" $web.image }}
+          imagePullPolicy: {{ $web.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: {{ $web.containerPort }}
+              protocol: TCP
+          env:
+            - name: MALL_API_UPSTREAM
+              value: {{ $web.apiUpstream | default (printf "%s.%s.svc.cluster.local:%v" .Values.api.name .Release.Namespace .Values.api.containerPort) | quote }}
+            - name: NGINX_RESOLVER
+              value: {{ $web.resolver | quote }}
+          {{- with $web.readinessProbe }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $web.livenessProbe }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $web.resources }}
+          resources:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $web.securityContext }}
+          securityContext:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- if $web.nginxConfig.enabled }}
+          volumeMounts:
+            - name: nginx-conf
+              mountPath: /etc/nginx/templates/mall.conf.template
+              subPath: default.conf
+              readOnly: true
+          {{- end }}
+      {{- if $web.nginxConfig.enabled }}
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: {{ $web.name }}-nginx
+      {{- end }}
+      {{- with $web.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $web.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with $web.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $web.name }}
+  labels:
+    {{- include "ops-mall.labels" $ctx | nindent 4 }}
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "ops-mall.selectorLabels" $ctx | nindent 4 }}
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+      protocol: TCP
+{{- if $web.pdb.enabled }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $web.name }}
+  labels:
+    {{- include "ops-mall.labels" $ctx | nindent 4 }}
+spec:
+  minAvailable: {{ $web.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "ops-mall.selectorLabels" $ctx | nindent 6 }}
+{{- end }}

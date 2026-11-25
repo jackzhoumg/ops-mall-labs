@@ -1,0 +1,114 @@
+# Lab 10：Fluent Bit DaemonSet 采集 K8s 容器日志 → Loki
+# 写作时版本：fluent/fluent-bit chart 0.58.3（Fluent Bit 5.1.3）。以官方最新文档为准。
+#
+# 用法（k8s-master）：
+#   helm upgrade --install fluent-bit oci://ghcr.io/fluent/helm-charts/fluent-bit \
+#     --version 0.58.3 -n logging -f fluent-bit/fluent-bit-values.yaml
+#
+# 数据流：
+#   /var/log/containers/*.log（containerd 写的 CRI 格式）
+#     → tail 输入（按 CRI 格式解析，拼接被切开的长行）
+#     → kubernetes 过滤器（补上 namespace、pod、容器名、Pod 标签；日志是 JSON 就展开成字段）
+#     → rewrite_tag（mall 业务命名空间的日志改打 mall.* 标签）
+#     → 两个 loki 输出：mall.* 写租户 mall，其余写租户 platform
+
+kind: DaemonSet
+
+# 控制平面节点上的 Pod 日志也要收（kube-apiserver、etcd 等），所以容忍 master 的污点
+tolerations:
+  - key: node-role.kubernetes.io/control-plane
+    operator: Exists
+    effect: NoSchedule
+
+resources:
+  requests:
+    cpu: 50m
+    memory: 64Mi
+  limits:
+    memory: 192Mi
+
+# 让 Lab 09 的 Prometheus 抓 Fluent Bit 自己的指标（输入输出条数、重试、丢弃）
+serviceMonitor:
+  enabled: true
+  interval: 30s
+
+config:
+  service: |
+    [SERVICE]
+        Daemon Off
+        Flush {{ .Values.flush }}
+        Log_Level {{ .Values.logLevel }}
+        Parsers_File /fluent-bit/etc/parsers.conf
+        Parsers_File /fluent-bit/etc/conf/custom_parsers.conf
+        HTTP_Server On
+        HTTP_Listen 0.0.0.0
+        HTTP_Port {{ .Values.metricsPort }}
+        Health_Check On
+
+  inputs: |
+    [INPUT]
+        Name              tail
+        Tag               kube.*
+        Path              /var/log/containers/*.log
+        # 不收 Fluent Bit 自己的日志，否则它输出一条报错日志又被自己采集，可能形成循环
+        Exclude_Path      /var/log/containers/fluent-bit-*_logging_*.log
+        # K8s 1.24 起默认运行时是 containerd，日志是 CRI 格式；docker 格式留着兼容老节点
+        multiline.parser  cri, docker
+        # 记录每个文件读到哪了，Fluent Bit 重启后从断点继续，不重复也不丢
+        DB                /var/log/flb_kube.db
+        # 内存缓冲上限，下游 Loki 慢的时候暂停读文件，防止 Fluent Bit 自己被 OOM
+        Mem_Buf_Limit     20MB
+        Skip_Long_Lines   On
+        Refresh_Interval  10
+
+  filters: |
+    [FILTER]
+        Name                kubernetes
+        Match               kube.*
+        # 日志内容是 JSON（mall-api 用 slog 输出 JSON）就展开成顶层字段：level、msg、request_id、status、duration_ms……
+        Merge_Log           On
+        # 展开后删掉原始的 log 字段，避免同一份内容存两遍
+        Keep_Log            Off
+        # 允许 Pod 用注解 fluentbit.io/parser 指定解析器、fluentbit.io/exclude: "true" 不采集
+        K8S-Logging.Parser  On
+        K8S-Logging.Exclude On
+        Labels              On
+        Annotations         Off
+
+    [FILTER]
+        Name                  rewrite_tag
+        Match                 kube.*
+        # 规则：命名空间是 mall / mall-staging / mall-prod 的，标签改成 mall.<原标签>，最后的 false 表示不保留原记录
+        Rule                  $kubernetes['namespace_name'] ^(mall|mall-staging|mall-prod)$ mall.$TAG false
+        Emitter_Name          re_emitted_mall
+        Emitter_Mem_Buf_Limit 20M
+
+  outputs: |
+    [OUTPUT]
+        Name                loki
+        Match               mall.*
+        Host                loki-gateway.logging.svc.cluster.local
+        Port                80
+        # 租户：商城业务线
+        Tenant_ID           mall
+        # 标签只放取值少的字段。pod 名每次发布都变，放标签会让流（stream）数量暴涨，所以放结构化元数据
+        Labels              job=fluent-bit, cluster=lab, namespace=$kubernetes['namespace_name'], app=$kubernetes['labels']['app.kubernetes.io/name'], container=$kubernetes['container_name']
+        Structured_Metadata pod=$kubernetes['pod_name'], node=$kubernetes['host']
+        # kubernetes 字段已经变成标签和元数据了，日志正文里不再重复；_p 是 CRI 的分片标记，没用
+        Remove_Keys         kubernetes, _p
+        Line_Format         json
+        Retry_Limit         10
+
+    [OUTPUT]
+        Name                loki
+        Match               kube.*
+        Host                loki-gateway.logging.svc.cluster.local
+        Port                80
+        # 租户：平台组件（kube-system、monitoring、logging 等）
+        Tenant_ID           platform
+        Labels              job=fluent-bit, cluster=lab, namespace=$kubernetes['namespace_name'], app=$kubernetes['labels']['app.kubernetes.io/name'], container=$kubernetes['container_name']
+        Structured_Metadata pod=$kubernetes['pod_name'], node=$kubernetes['host']
+        Remove_Keys         kubernetes, _p
+        Line_Format         json
+        Retry_Limit         10
+

@@ -1,0 +1,99 @@
+# Node-1：以太坊执行层（Geth）+ 共识层（Lighthouse）只读节点
+# 用法（lab-eth1）：
+#   cp .env.example .env && vi .env
+#   bash scripts/gen-jwt.sh            # 生成 ${DATA_DIR}/jwt/jwt.hex
+#   docker compose up -d
+#   bash scripts/sync-status.sh
+#
+# 端口设计：
+#   P2P（30303 / 9000 / 9001）对公网开放，否则找不到足够的对等节点，同步很慢
+#   JSON-RPC 8545、Beacon API 5052 只绑 127.0.0.1，对内服务统一走 Nginx 反代（nginx/rpc.conf）
+#   Engine API 8551 只在 compose 内部网络，执行层和共识层之间用 JWT 认证
+#   指标 6060 / 5054 绑内网地址给 Prometheus 抓，防火墙只放行 K8s 节点
+name: eth-node
+
+services:
+  geth:
+    image: ${GETH_IMAGE:-ethereum/client-go:v1.17.10}
+    container_name: geth
+    restart: unless-stopped
+    # 停机给足时间：Geth 退出时要把内存里的状态刷到磁盘，被强杀会导致下次启动长时间修复甚至重新同步
+    stop_grace_period: 5m
+    stop_signal: SIGINT
+    command:
+      - --${NETWORK:-hoodi}
+      - --datadir=/data
+      - --syncmode=snap
+      - --cache=${GETH_CACHE:-4096}
+      # JSON-RPC：只开 eth / net / web3。admin、debug、txpool、personal 一律不开
+      - --http
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.api=eth,net,web3
+      - --http.vhosts=*
+      # 交易索引保留全部历史：钱包要按交易哈希查任意时间的充值记录（默认只保留约一年）
+      - --history.transactions=0
+      # Engine API：只给共识层用，必须 JWT
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8551
+      - --authrpc.vhosts=*
+      - --authrpc.jwtsecret=/jwt/jwt.hex
+      - --metrics
+      - --metrics.addr=0.0.0.0
+      - --metrics.port=6060
+      - --port=30303
+      - --maxpeers=50
+      # 剩余空间低于 20GB 时自动停机，比写满磁盘把数据库写坏强
+      - --datadir.minfreedisk=20480
+      - --log.format=json
+    ports:
+      - "30303:30303/tcp"
+      - "30303:30303/udp"
+      - "127.0.0.1:8545:8545"
+      - "${METRICS_BIND:-0.0.0.0}:6060:6060"
+    volumes:
+      - ${DATA_DIR:-/data/eth}/geth:/data
+      - ${DATA_DIR:-/data/eth}/jwt:/jwt:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"
+
+  lighthouse:
+    image: ${LIGHTHOUSE_IMAGE:-sigp/lighthouse:v8.3.3}
+    container_name: lighthouse-bn
+    restart: unless-stopped
+    stop_grace_period: 2m
+    depends_on:
+      - geth
+    command:
+      - lighthouse
+      - bn
+      - --network=${NETWORK:-hoodi}
+      - --datadir=/data
+      - --execution-endpoint=http://geth:8551
+      - --execution-jwt=/jwt/jwt.hex
+      - --checkpoint-sync-url=${CHECKPOINT_SYNC_URL:-https://hoodi.checkpoint.sigp.io}
+      - --http
+      - --http-address=0.0.0.0
+      - --http-port=5052
+      - --metrics
+      - --metrics-address=0.0.0.0
+      - --metrics-port=5054
+      - --port=9000
+      - --target-peers=80
+    ports:
+      - "9000:9000/tcp"
+      - "9000:9000/udp"
+      - "9001:9001/udp"
+      - "127.0.0.1:5052:5052"
+      - "${METRICS_BIND:-0.0.0.0}:5054:5054"
+    volumes:
+      - ${DATA_DIR:-/data/eth}/lighthouse:/data
+      - ${DATA_DIR:-/data/eth}/jwt:/jwt:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "5"

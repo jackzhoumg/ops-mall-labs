@@ -1,0 +1,4 @@
+# 写作时版本（2026-11）。Python 3.10+，镜像用 python:3.13-slim
+fastapi==0.165.0
+uvicorn==0.54.0
+httpx==0.28.1

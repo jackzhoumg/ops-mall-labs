@@ -1,0 +1,49 @@
+{{- if .Values.externalServices.enabled }}
+{{- $ext := .Values.externalServices -}}
+{{- $items := list $ext.mysql -}}
+{{- if $ext.redis.enabled -}}
+{{- $items = append $items $ext.redis -}}
+{{- end -}}
+{{- range $i, $svc := $items }}
+{{- if $i }}
+---
+{{- end }}
+# 数据库不在 K8s 里（lab-db1）。无选择器 Service + 手写 EndpointSlice，
+# 应用照样用 {{ $svc.name }}:{{ $svc.port }} 访问，以后数据库迁移只改这里的 IP
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $svc.name }}
+  labels:
+    {{- include "ops-mall.labels" (dict "root" $ "name" $svc.name) | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: {{ $svc.name }}
+      port: {{ $svc.port }}
+      targetPort: {{ $svc.port }}
+      protocol: TCP
+---
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: {{ $svc.name }}-external
+  labels:
+    {{- include "ops-mall.labels" (dict "root" $ "name" $svc.name) | nindent 4 }}
+    # 这个标签把 EndpointSlice 和同名 Service 关联起来
+    kubernetes.io/service-name: {{ $svc.name }}
+    # 不是 endpointslice-controller 管的，标明管理者，控制器就不会删它
+    endpointslice.kubernetes.io/managed-by: ops-mall-helm
+addressType: IPv4
+ports:
+  # 名字必须和 Service 端口名一致
+  - name: {{ $svc.name }}
+    port: {{ $svc.port }}
+    protocol: TCP
+endpoints:
+  - addresses:
+      - {{ $ext.address | quote }}
+    conditions:
+      ready: true
+{{- end }}
+{{- end }}

@@ -1,0 +1,17 @@
+- name: 安装
+  ansible.builtin.import_tasks: install.yml
+
+- name: 配置与初始化
+  ansible.builtin.import_tasks: config.yml
+
+- name: 主库：建库、导入数据、建账号
+  ansible.builtin.import_tasks: primary.yml
+  when: mysql_role == 'primary'
+
+- name: 从库：配置复制
+  ansible.builtin.import_tasks: replica.yml
+  when: mysql_role == 'replica'
+
+- name: 定时备份
+  ansible.builtin.import_tasks: backup.yml
+  when: mysql_backup_enabled | bool

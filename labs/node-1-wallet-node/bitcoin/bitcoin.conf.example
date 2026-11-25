@@ -1,0 +1,33 @@
+# Node-1 扩展：bitcoind（Bitcoin Core）钱包节点配置示例，测试网 testnet4
+# 写作时版本 Bitcoin Core 32.1，下载 https://bitcoincore.org/bin/bitcoin-core-32.1/（以官网为准，校验签名）
+# 放在 /data/btc/bitcoin.conf，启动：bitcoind -conf=/data/btc/bitcoin.conf -datadir=/data/btc
+#
+# 和以太坊节点最大的不同：
+#   - 只有一个进程，不需要共识层客户端，也没有 JWT
+#   - UTXO 模型：充值扫块要看每个区块里的交易输出（vout），按地址匹配
+#   - 约 10 分钟一个块，确认数一般要 3-6 个；高度告警阈值要按"分钟"换算
+#   - 按交易哈希查任意交易需要 txindex=1（全量索引，磁盘多一截）
+
+# 网络：testnet4（BIP94）。主网去掉这行；不要在同一个数据目录切换网络
+testnet4=1
+
+[testnet4]
+# RPC 只听本机，对内服务走 Nginx 反代（同 nginx/rpc.conf 的思路）
+server=1
+rpcbind=127.0.0.1
+rpcallowip=127.0.0.1
+rpcport=48332
+# RPC 认证用 rpcauth（加盐哈希），不要写明文 rpcpassword。
+# 生成：python3 share/rpcauth/rpcauth.py walletsvc  （Bitcoin Core 源码包里自带）
+rpcauth=walletsvc:REPLACE_WITH_SALT$REPLACE_WITH_HASH
+
+# 交易索引：钱包按 txid 查充值需要
+txindex=1
+# 内存池和缓存
+dbcache=4096
+maxmempool=300
+# 新区块 / 新交易推送给扫块服务（比轮询及时）
+zmqpubrawblock=tcp://127.0.0.1:28332
+zmqpubhashtx=tcp://127.0.0.1:28333
+# 节点自带钱包功能不用（私钥不放在节点上，由独立的签名服务管理）
+disablewallet=1

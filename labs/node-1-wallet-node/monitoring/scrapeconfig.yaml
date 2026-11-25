@@ -1,0 +1,70 @@
+# Node-1：Prometheus（Lab 09 的 kube-prometheus-stack）抓取节点机器上的指标
+# 用 ScrapeConfig 写静态目标，和 Lab 09 抓虚拟机 exporter 的方式一样。
+# 防火墙（lab-eth1）：只放行 K8s 节点访问指标端口
+#   sudo firewall-cmd --permanent --add-rich-rule='rule family=ipv4 source address=192.168.56.21/32 port port=6060-9701 protocol=tcp accept'
+#   （.22 .23 同理；Calico 默认 SNAT，源地址是 K8s 节点 IP）
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: eth-geth
+  namespace: monitoring
+spec:
+  jobName: eth-geth
+  scrapeInterval: 15s
+  # Geth 的 Prometheus 格式指标路径不是 /metrics
+  metricsPath: /debug/metrics/prometheus
+  staticConfigs:
+    - targets: ["192.168.56.31:6060"]
+      labels:
+        hostname: lab-eth1
+        network: hoodi
+    - targets: ["192.168.56.32:6060"]
+      labels:
+        hostname: lab-eth2
+        network: hoodi
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: eth-lighthouse
+  namespace: monitoring
+spec:
+  jobName: eth-lighthouse
+  scrapeInterval: 15s
+  staticConfigs:
+    - targets: ["192.168.56.31:5054"]
+      labels:
+        hostname: lab-eth1
+        network: hoodi
+    - targets: ["192.168.56.32:5054"]
+      labels:
+        hostname: lab-eth2
+        network: hoodi
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: eth-height-check
+  namespace: monitoring
+spec:
+  jobName: eth-height-check
+  scrapeInterval: 15s
+  staticConfigs:
+    - targets: ["192.168.56.31:9701"]
+      labels:
+        hostname: lab-eth1
+        network: hoodi
+---
+# 节点机器本身的 CPU / 内存 / 磁盘：装 Lab 09 的 node_exporter（labs/lab09-monitoring/exporters/install-exporters.sh）
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: eth-node-exporter
+  namespace: monitoring
+spec:
+  jobName: eth-node-exporter
+  scrapeInterval: 30s
+  staticConfigs:
+    - targets: ["192.168.56.31:9100", "192.168.56.32:9100"]
+      labels:
+        role: eth-node

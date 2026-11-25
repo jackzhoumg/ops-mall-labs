@@ -1,0 +1,56 @@
+- name: 生成 my.cnf
+  ansible.builtin.template:
+    src: my.cnf.j2
+    dest: /etc/my.cnf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: restart mysqld
+
+# 官方 RPM 第一次启动时会自动初始化数据目录，并把 root 临时密码写进 /var/log/mysqld.log，
+# 自动化不好取。这里先用 --initialize-insecure 初始化（root 无密码、只能本机 socket 登录），
+# 紧接着就设置 root 密码。creates 保证只在数据目录为空时执行一次（幂等）。
+- name: 初始化数据目录（只执行一次）
+  ansible.builtin.command:
+    cmd: mysqld --initialize-insecure --user=mysql --datadir={{ mysql_datadir }}
+    creates: "{{ mysql_datadir }}/mysql"
+  register: mysql_init
+
+- name: 修正数据目录的 SELinux 标签
+  ansible.builtin.command:
+    cmd: restorecon -R {{ mysql_datadir }}
+  when: mysql_init is changed
+
+- name: 启动 mysqld
+  ansible.builtin.systemd_service:
+    name: mysqld
+    state: started
+    enabled: true
+
+- name: 设置 root 密码
+  ansible.mysql.mysql_user:
+    name: root
+    host: localhost
+    password: "{{ mysql_root_password }}"
+    login_user: root
+    login_password: "{{ mysql_root_password }}"
+    login_unix_socket: "{{ mysql_socket }}"
+    # 第一次 root 没有密码，先试无密码登录
+    check_implicit_admin: true
+    # 不写 binlog：每台机器的 root 密码各自设置，不能复制到从库，也避免从库产生多余的 GTID
+    sql_log_bin: false
+    state: present
+  no_log: true
+
+- name: root 的客户端配置，以后本机执行 mysql 不用输密码
+  ansible.builtin.template:
+    src: root.my.cnf.j2
+    dest: /root/.my.cnf
+    owner: root
+    group: root
+    mode: "0600"
+  diff: false
+
+- name: 配置变了现在就重启，后面的任务要用新配置
+  ansible.builtin.meta: flush_handlers

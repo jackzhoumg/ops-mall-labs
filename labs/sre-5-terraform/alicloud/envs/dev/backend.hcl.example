@@ -1,0 +1,8 @@
+# 把 bootstrap-state 输出的值填进来，另存为 backend.hcl（不要提交 AccessKey）
+bucket              = "ops-mall-tfstate-<你的随机后缀>"
+prefix              = "ops-mall"
+key                 = "dev/terraform.tfstate"
+region              = "cn-hangzhou"
+encrypt             = true
+tablestore_endpoint = "https://<OTS实例名>.cn-hangzhou.ots.aliyuncs.com"
+tablestore_table    = "tf_state_lock"

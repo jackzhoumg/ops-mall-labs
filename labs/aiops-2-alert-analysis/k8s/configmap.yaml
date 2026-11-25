@@ -1,0 +1,35 @@
+# AIOps-2：alert-analyzer 的非敏感配置。密钥和机器人地址放 Secret（secret.example.yaml）。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: alert-analyzer-config
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alert-analyzer
+    app.kubernetes.io/part-of: ops-mall
+data:
+  # kube-prometheus-stack 的 Prometheus Service：<release 名>-prometheus，端口 9090（Lab 09）
+  PROM_URL: "http://kube-prometheus-stack-prometheus.monitoring.svc:9090"
+  # Loki 查询入口（Lab 10）。grafana/loki Helm Chart 默认有 loki-gateway（80 端口）；
+  # 你的 Lab 10 装法不同就改这里，先用 kubectl -n logging get svc 确认
+  LOKI_URL: "http://loki-gateway.logging.svc"
+  # 日志流选择器，${namespace} 会被替换成告警里的 namespace。标签名要和 Lab 10 采集时打的标签一致
+  LOKI_SELECTOR: '{namespace="${namespace}", container="mall-api"}'
+  # Loki 开了多租户（auth_enabled: true）时填租户 ID
+  LOKI_TENANT: ""
+  K8S_ENABLED: "true"
+  K8S_LABEL_SELECTOR: "app.kubernetes.io/name=mall-api"
+  LOOKBACK_MINUTES: "15"
+  SOURCE_TIMEOUT: "5"
+  # 大模型读超时（秒）。超时就降级推送原始告警 + 上下文
+  LLM_TIMEOUT: "30"
+  # 服务支持 response_format={"type":"json_object"} 时设成 true，JSON 输出更稳定
+  LLM_JSON_MODE: "false"
+  MAX_CONTEXT_CHARS: "8000"
+  # 同一告警（告警名 + 命名空间 + 级别）30 分钟内只分析一次；告警恢复后重置
+  COOLDOWN_SECONDS: "1800"
+  # info 级别不分析，省钱
+  ANALYZE_SEVERITIES: "critical,warning"
+  # 群消息里"有用 / 没用"链接的前缀，对应 httproute.yaml；不想暴露就留空
+  FEEDBACK_BASE_URL: "http://alert-analyzer.lab.local"
+  DB_PATH: "/data/analyzer.db"

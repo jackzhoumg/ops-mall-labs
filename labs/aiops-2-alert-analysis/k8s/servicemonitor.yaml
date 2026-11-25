@@ -1,0 +1,54 @@
+# AIOps-2：让 Prometheus 抓 alert-analyzer 自己的指标（分析次数、降级次数、大模型耗时）
+# 分析服务自己也要被监控：它悄悄挂了，所有"AI 分析"消息就没了，而原始告警还在发，很难察觉。
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: alert-analyzer
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alert-analyzer
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: alert-analyzer
+  endpoints:
+    - port: http
+      path: /metrics
+      interval: 30s
+---
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: alert-analyzer
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  groups:
+    - name: alert-analyzer
+      rules:
+        - alert: AlertAnalyzerDown
+          expr: absent(up{job="alert-analyzer", namespace="monitoring"} == 1)
+          for: 5m
+          labels:
+            severity: warning
+            namespace: monitoring
+          annotations:
+            summary: "alert-analyzer 没有健康实例"
+            description: "告警智能分析服务不可用，告警仍会通过 alert-bridge 正常发送，只是没有 AI 分析。"
+        # 一小时里一半以上降级：大模型服务不稳定、密钥过期或额度用完
+        - alert: AlertAnalyzerFallbackHigh
+          expr: |
+            sum(increase(alert_analyzer_analyses_total{result="fallback"}[1h]))
+              /
+            sum(increase(alert_analyzer_analyses_total[1h])) > 0.5
+            and
+            sum(increase(alert_analyzer_analyses_total[1h])) >= 3
+          for: 10m
+          labels:
+            severity: info
+            namespace: monitoring
+          annotations:
+            summary: "alert-analyzer 降级比例 {{ $value | humanizePercentage }}"
+            description: "大模型调用失败或输出不合法的比例过高，看 alert-analyzer 日志里的 llm_error / llm_bad_output。"

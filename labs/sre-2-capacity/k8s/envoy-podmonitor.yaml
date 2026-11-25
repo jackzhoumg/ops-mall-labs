@@ -1,0 +1,29 @@
+# 让 kube-prometheus-stack 抓取 Envoy 网关代理的指标（:19001/stats/prometheus）。
+# Lab 09 没有抓网关指标，压测定位瓶颈时需要它。
+#
+# 用法（k8s-master）：kubectl apply -f k8s/envoy-podmonitor.yaml
+# 端口名先确认一下：
+#   kubectl -n envoy-gateway-system get pod -l app.kubernetes.io/managed-by=envoy-gateway \
+#     -o jsonpath='{.items[0].spec.containers[?(@.name=="envoy")].ports}'
+# 输出里 19001 对应的 name 不是 metrics 的话，改下面的 port。
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: envoy-gateway-proxy
+  namespace: monitoring
+  labels:
+    # Lab 09 设置了 podMonitorSelectorNilUsesHelmValues: false，不需要 release 标签；
+    # 你的 Prometheus 按 release 标签过滤的话保留这一行
+    release: kube-prometheus-stack
+spec:
+  namespaceSelector:
+    matchNames:
+      - envoy-gateway-system
+  selector:
+    matchLabels:
+      app.kubernetes.io/managed-by: envoy-gateway
+      app.kubernetes.io/component: proxy
+  podMetricsEndpoints:
+    - port: metrics
+      path: /stats/prometheus
+      interval: 15s

@@ -1,0 +1,44 @@
+# Calico 安装参数（Tigera Operator 方式）
+# 基于官方 v3.33.1 的 manifests/custom-resources.yaml 修改，写作时 Calico 最新版 v3.33.1，以官方文档为准
+# 改了三处：
+#   1. ipPools.cidr 改成 10.244.0.0/16，和 kubeadm-config.yaml 的 podSubnet 一致
+#      官方默认 192.168.0.0/16 会和实验网段 192.168.56.0/24 重叠，Pod 和节点会互相抢地址
+#   2. nodeAddressAutodetectionV4 指定实验网段，避免选中 VirtualBox 的 NAT 网卡
+#   3. registry 可选：国内拉不下 quay.io 时，把镜像同步到 Harbor 后改这里
+# 用法见 README.md
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  # registry: harbor.lab.local/
+  # imagePath: calico
+  calicoNetwork:
+    nodeAddressAutodetectionV4:
+      cidrs:
+        - 192.168.56.0/24
+    ipPools:
+      - name: default-ipv4-ippool
+        blockSize: 26
+        cidr: 10.244.0.0/16
+        # 同网段直接路由，跨网段才走 VXLAN 封装；实验三台在同一网段
+        encapsulation: VXLANCrossSubnet
+        natOutgoing: Enabled
+        nodeSelector: all()
+---
+apiVersion: operator.tigera.io/v1
+kind: APIServer
+metadata:
+  name: default
+spec: {}
+---
+# Goldmane（流量聚合）和 Whisker（流量观察界面）是 v3.30 起的组件，实验机器内存紧张可以删掉这两段
+apiVersion: operator.tigera.io/v1
+kind: Goldmane
+metadata:
+  name: default
+---
+apiVersion: operator.tigera.io/v1
+kind: Whisker
+metadata:
+  name: default

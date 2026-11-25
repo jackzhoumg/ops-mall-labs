@@ -1,0 +1,16 @@
+# 演练前的防护：任何时候至少保留 1 个 mall-api Pod 可用。
+# PDB 拦得住“驱逐”（kubectl drain、节点升级），拦不住 PodChaos 的直接删除，
+# 所以 PodChaos 实验仍然要自己用 mode 控制杀几个。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mall-api
+  namespace: mall
+  labels:
+    app.kubernetes.io/name: mall-api
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mall-api

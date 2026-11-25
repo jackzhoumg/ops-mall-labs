@@ -1,0 +1,22 @@
+# Alertmanager：SLO 告警怎么发。
+#
+# Lab 09 的 alertmanager-values.yaml 已经按 severity 分好了路由：
+#   severity=critical → oncall-p1（值班群 + 钉钉，30 分钟重复提醒）
+#   severity=warning  → ops-wecom（运维群，工作时间处理）
+# SLO 规则里快烧告警是 critical（page）、慢烧和预算耗尽是 warning（ticket），不用加新路由就能发对地方。
+#
+# 只需要加一条抑制规则：快烧告警在响时，同一个 SLO 的慢烧告警不再重复发。
+# 把下面这一项追加到 Lab 09 的 values/alertmanager-values.yaml 里 alertmanager.config.inhibit_rules 列表的末尾。
+# 注意不要单独用 -f 传这个文件：Helm 合并 values 时列表是整个替换，会把 Lab 09 原有的抑制规则全部覆盖掉。
+#
+# 改完后（k8s-master）：
+#   helm upgrade kube-prometheus-stack prometheus-community/kube-prometheus-stack -n monitoring \
+#     -f values/kube-prometheus-stack-values.yaml -f values/alertmanager-values.yaml
+alertmanager:
+  config:
+    inhibit_rules:
+      - source_matchers:
+          - alertname = "SLOErrorBudgetBurnFast"
+        target_matchers:
+          - alertname = "SLOErrorBudgetBurnSlow"
+        equal: ["service", "slo"]

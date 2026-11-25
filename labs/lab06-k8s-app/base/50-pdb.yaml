@@ -1,0 +1,29 @@
+# 主动驱逐（kubectl drain、节点升级）时，至少保留 1 个可用副本。
+# 只管“自愿中断”，节点宕机这类意外不受它约束。
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mall-api
+  namespace: mall
+  labels:
+    app.kubernetes.io/name: mall-api
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mall-api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mall-web
+  namespace: mall
+  labels:
+    app.kubernetes.io/name: mall-web
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mall-web

@@ -1,0 +1,13 @@
+# binlog 增量上传，每 5 分钟一次
+#   sudo install -m 755 mysql/mysql-binlog-upload.sh /usr/local/bin/mall-mysql-binlog-upload
+#   sudo install -m 644 mysql/systemd/mall-mysql-binlog-upload.* /etc/systemd/system/
+[Unit]
+Description=mall MySQL binlog upload to MinIO
+After=mysqld.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=ENV_FILE=/etc/mall-backup/backup.env
+ExecStart=/usr/local/bin/mall-mysql-binlog-upload
+Nice=10

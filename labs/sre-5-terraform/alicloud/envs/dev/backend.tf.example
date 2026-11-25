@@ -1,0 +1,6 @@
+# 远程 state：把这个文件复制成 backend.tf，再执行
+#   terraform init -migrate-state -backend-config=backend.hcl
+# bucket、表名这些写在 backend.hcl 里（参考 backend.hcl.example），不同环境用不同的 key。
+terraform {
+  backend "oss" {}
+}

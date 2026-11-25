@@ -1,0 +1,57 @@
+# CI 发布用的受限账号：只能在 mall 命名空间里查看和更新 Deployment
+# 在 k8s-master 上执行：kubectl apply -f labs/lab07-cicd/k8s/ci-deployer-rbac.yaml
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ci-deployer
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ci-deployer
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+rules:
+  # set image / annotate 需要 patch；rollout status 需要 get、watch
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "patch"]
+  # rollout status 要看 ReplicaSet；排查时要看 Pod
+  - apiGroups: ["apps"]
+    resources: ["replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  # 注意：没有 secrets、没有 delete、没有 pods/exec
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ci-deployer
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ci-deployer
+subjects:
+  - kind: ServiceAccount
+    name: ci-deployer
+    namespace: mall
+---
+# 长期有效的 ServiceAccount Token（K8s 1.24 起不再自动创建，需要手动建这种 Secret）
+# 更安全的做法是用 kubectl create token 生成有过期时间的 Token，定期轮换
+apiVersion: v1
+kind: Secret
+metadata:
+  name: ci-deployer-token
+  namespace: mall
+  annotations:
+    kubernetes.io/service-account.name: ci-deployer
+type: kubernetes.io/service-account-token

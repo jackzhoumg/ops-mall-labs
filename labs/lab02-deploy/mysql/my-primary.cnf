@@ -1,0 +1,31 @@
+# /etc/my.cnf（lab-db1，主库）
+# 整个文件替换官方 RPM 自带的 /etc/my.cnf，和 Lab 03 roles/mysql/templates/my.cnf.j2 渲染结果一致
+[mysqld]
+datadir=/var/lib/mysql
+socket=/var/lib/mysql/mysql.sock
+log-error=/var/log/mysqld.log
+pid-file=/var/run/mysqld/mysqld.pid
+bind-address=0.0.0.0
+port=3306
+# 不做 DNS 反查，避免 DNS 慢导致连接卡住；授权里只能用 IP
+skip-name-resolve
+max_connections=500
+character-set-server=utf8mb4
+collation-server=utf8mb4_0900_ai_ci
+# 2G 内存的实验机给 512M；生产一般给物理内存的 50%-70%
+innodb_buffer_pool_size=512M
+
+# ---- 复制 ----
+# server-id 在主从集群里必须唯一：主库 1，从库 2
+server-id=1
+log-bin=mysql-bin
+# binlog 保留 7 天，做时间点恢复最多能回到 7 天前（前提是有 7 天内的全备）
+binlog_expire_logs_seconds=604800
+gtid_mode=ON
+enforce_gtid_consistency=ON
+
+# ---- 慢查询 ----
+slow_query_log=ON
+# 放在数据目录里：mysql 用户有写权限，SELinux 标签也对
+slow_query_log_file=/var/lib/mysql/slow.log
+long_query_time=1

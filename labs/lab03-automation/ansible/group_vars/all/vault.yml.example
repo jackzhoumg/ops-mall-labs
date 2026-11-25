@@ -1,0 +1,13 @@
+# 复制成 vault.yml，改成你自己的密码，再加密：
+#   cp group_vars/all/vault.yml.example group_vars/all/vault.yml
+#   vi group_vars/all/vault.yml
+#   ansible-vault encrypt group_vars/all/vault.yml
+# 加密后的 vault.yml 可以提交到 Git，vault 密码本身不能提交。
+vault_mysql_root_password: "ChangeMe-Root-123"
+# 课程约定的应用账号密码是 MallPass123（sql/init.sql 里也是它），这里保持一致；生产环境必须换掉
+vault_mall_db_password: "MallPass123"
+vault_mysql_repl_password: "ChangeMe-Repl-123"
+vault_mysql_backup_password: "ChangeMe-Backup-123"
+vault_redis_password: "ChangeMe-Redis-123"
+# keepalived VRRP 认证密码，最多 8 个字符
+vault_keepalived_auth_pass: "mall2026"

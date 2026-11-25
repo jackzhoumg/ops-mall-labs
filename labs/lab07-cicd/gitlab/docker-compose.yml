@@ -1,0 +1,38 @@
+# GitLab CE（Lab 07），在 lab-ci（192.168.56.16）上运行
+#   sudo mkdir -p /srv/gitlab && cd labs/lab07-cicd/gitlab && sudo docker compose up -d
+# 写作时版本：19.6.1-ce.0，以官方文档和 Docker Hub 最新 tag 为准
+#
+# 内存：官方单机基线 16 GB，最低 8 GB。lab-ci 只有 8 GB，下面按官方
+# “内存受限环境”文档关掉了 Puma 集群模式、内置监控，降低了 Sidekiq 并发。
+services:
+  gitlab:
+    image: gitlab/gitlab-ce:19.6.1-ce.0
+    container_name: gitlab
+    restart: always
+    hostname: gitlab.lab.local
+    environment:
+      GITLAB_OMNIBUS_CONFIG: |
+        external_url 'http://gitlab.lab.local'
+        # 宿主机的 22 端口留给 sshd，GitLab 的 SSH 走 2222
+        gitlab_rails['gitlab_shell_ssh_port'] = 2222
+        gitlab_rails['time_zone'] = 'Asia/Shanghai'
+        # 镜像仓库用 Harbor，关掉 GitLab 自带的 Container Registry
+        registry['enable'] = false
+        gitlab_rails['registry_enabled'] = false
+        # ---- 内存受限环境优化（官方文档：Running GitLab in a memory-constrained environment）----
+        puma['worker_processes'] = 0
+        sidekiq['concurrency'] = 10
+        prometheus_monitoring['enable'] = false
+        gitlab_kas['enable'] = false
+        gitlab_rails['env'] = { 'MALLOC_CONF' => 'dirty_decay_ms:1000,muzzy_decay_ms:1000' }
+        gitaly['env'] = { 'MALLOC_CONF' => 'dirty_decay_ms:1000,muzzy_decay_ms:1000', 'GITALY_COMMAND_SPAWN_MAX_PARALLEL' => '2' }
+    ports:
+      - "80:80"
+      - "2222:22"
+    volumes:
+      - /srv/gitlab/config:/etc/gitlab
+      - /srv/gitlab/logs:/var/log/gitlab
+      - /srv/gitlab/data:/var/opt/gitlab
+    shm_size: "256m"
+    # 防止 GitLab 把整台机器拖死，给 Jenkins 和构建留余量
+    mem_limit: 5g

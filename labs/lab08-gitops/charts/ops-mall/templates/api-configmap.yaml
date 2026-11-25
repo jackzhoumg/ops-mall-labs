@@ -1,0 +1,14 @@
+{{- $api := .Values.api -}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ $api.name }}-config
+  labels:
+    {{- include "ops-mall.labels" (dict "root" . "name" $api.name) | nindent 4 }}
+data:
+  {{- range $k, $v := $api.config }}
+  {{ $k }}: {{ $v | toString | quote }}
+  {{- end }}
+  {{- if and .Values.externalServices.redis.enabled $api.redisAddr }}
+  MALL_REDIS_ADDR: {{ $api.redisAddr | quote }}
+  {{- end }}

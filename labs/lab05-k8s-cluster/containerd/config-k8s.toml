@@ -1,0 +1,25 @@
+# containerd 2.x（配置 version = 3）里 K8s 需要改的三处，对照用
+# 完整文件用 containerd config default > /etc/containerd/config.toml 生成后再改，不要只放这几行
+# install-containerd.sh 会自动改好；这里给手工改的同学看位置
+version = 3
+
+[plugins]
+  [plugins.'io.containerd.cri.v1.images']
+    # 1. pause 镜像：默认 registry.k8s.io 国内拉不下来
+    #    版本和 kubeadm config images list 输出的 pause 一致（写作时 v1.35 是 3.10.1，v1.36 是 3.10.2）
+    [plugins.'io.containerd.cri.v1.images'.pinned_images]
+      sandbox = 'registry.aliyuncs.com/google_containers/pause:3.10.1'
+
+    # 2. 镜像仓库配置目录：每个仓库一个子目录放 hosts.toml 和证书
+    #    1.x 的 registry.mirrors / registry.configs 写法已废弃，不要和 config_path 混用
+    [plugins.'io.containerd.cri.v1.images'.registry]
+      config_path = '/etc/containerd/certs.d'
+
+  [plugins.'io.containerd.cri.v1.runtime']
+    [plugins.'io.containerd.cri.v1.runtime'.containerd]
+      [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes]
+        [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc]
+          runtime_type = 'io.containerd.runc.v2'
+          # 3. systemd cgroup 驱动，和 kubelet 一致
+          [plugins.'io.containerd.cri.v1.runtime'.containerd.runtimes.runc.options]
+            SystemdCgroup = true

@@ -1,0 +1,11 @@
+# 控制节点上提前编译好的二进制（app/mall-api 已在仓库 .gitignore 里，不会被提交）
+mall_api_binary_src: "{{ repo_root }}/app/mall-api"
+mall_api_install_dir: /opt/mall-api
+mall_api_conf_dir: /etc/mall-api
+mall_api_user: mall
+mall_api_port: 8080
+mall_api_debug: false
+mall_api_log_level: info
+mall_api_cache_ttl: 30s
+mall_api_db_dsn: "{{ mall_db_user }}:{{ mall_db_password }}@tcp({{ mysql_primary_host }}:{{ mysql_port }})/{{ mall_db_name }}?parseTime=true&timeout=3s"
+mall_api_redis_addr: "{{ redis_host }}:{{ redis_port }}"

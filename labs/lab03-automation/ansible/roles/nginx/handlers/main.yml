@@ -1,0 +1,12 @@
+# 两个 handler 都监听 "reload nginx"，按定义顺序执行：先 nginx -t 检查语法，失败就停，不会 reload 一份坏配置
+- name: check nginx config
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false
+  listen: reload nginx
+
+- name: reload nginx service
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: reloaded
+  listen: reload nginx

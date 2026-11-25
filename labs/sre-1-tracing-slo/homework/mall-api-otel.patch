@@ -1,0 +1,421 @@
+diff --git a/app/go.mod b/app/go.mod
+index b57d787..14b7322 100644
+--- a/app/go.mod
++++ b/app/go.mod
+@@ -3,20 +3,44 @@ module github.com/jackzhoumg/ops-mall-labs/app
+ go 1.26.0
+ 
+ require (
++	github.com/XSAM/otelsql v0.44.0
+ 	github.com/go-sql-driver/mysql v1.10.2
+ 	github.com/prometheus/client_golang v1.25.0
++	github.com/redis/go-redis/extra/redisotel/v9 v9.23.0
+ 	github.com/redis/go-redis/v9 v9.23.0
++	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0
++	go.opentelemetry.io/otel v1.47.0
++	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.47.0
++	go.opentelemetry.io/otel/sdk v1.47.0
++	go.opentelemetry.io/otel/trace v1.47.0
+ )
+ 
+ require (
+ 	filippo.io/edwards25519 v1.2.0 // indirect
+ 	github.com/beorn7/perks v1.0.1 // indirect
++	github.com/cenkalti/backoff/v5 v5.0.3 // indirect
+ 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
++	github.com/felixge/httpsnoop v1.1.0 // indirect
++	github.com/go-logr/logr v1.4.4 // indirect
++	github.com/go-logr/stdr v1.2.2 // indirect
++	github.com/google/uuid v1.6.0 // indirect
++	github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 // indirect
+ 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
+ 	github.com/prometheus/client_model v0.6.3 // indirect
+ 	github.com/prometheus/common v0.72.0 // indirect
+ 	github.com/prometheus/procfs v0.22.0 // indirect
++	github.com/redis/go-redis/extra/rediscmd/v9 v9.23.0 // indirect
++	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
++	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.47.0 // indirect
++	go.opentelemetry.io/otel/log v1.47.0 // indirect
++	go.opentelemetry.io/otel/metric v1.47.0 // indirect
++	go.opentelemetry.io/proto/otlp v1.11.0 // indirect
+ 	go.uber.org/atomic v1.12.0 // indirect
++	golang.org/x/net v0.59.0 // indirect
+ 	golang.org/x/sys v0.48.0 // indirect
++	golang.org/x/text v0.42.0 // indirect
++	google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc // indirect
++	google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc // indirect
++	google.golang.org/grpc v1.83.2 // indirect
+ 	google.golang.org/protobuf v1.36.12 // indirect
+ )
+diff --git a/app/go.sum b/app/go.sum
+index ab1ca31..ac55f8b 100644
+--- a/app/go.sum
++++ b/app/go.sum
+@@ -1,17 +1,34 @@
+ filippo.io/edwards25519 v1.2.0 h1:crnVqOiS4jqYleHd9vaKZ+HKtHfllngJIiOpNpoJsjo=
+ filippo.io/edwards25519 v1.2.0/go.mod h1:xzAOLCNug/yB62zG1bQ8uziwrIqIuxhctzJT18Q77mc=
++github.com/XSAM/otelsql v0.44.0 h1:KxCiv26Fh4okTPlgROE2BWk+lgi20pdgMGxuSwgbRls=
++github.com/XSAM/otelsql v0.44.0/go.mod h1:FySZIr4R4WWMqvIjf2Iah7C0LAlpKvs9XRkaX7rE608=
+ github.com/beorn7/perks v1.0.1 h1:VlbKKnNfV8bJzeqoa4cOKqO6bYr3WgKZxO8Z16+hsOM=
+ github.com/beorn7/perks v1.0.1/go.mod h1:G2ZrVWU2WbWT9wwq4/hrbKbnv/1ERSJQ0ibhJ6rlkpw=
+ github.com/bsm/ginkgo/v2 v2.12.0 h1:Ny8MWAHyOepLGlLKYmXG4IEkioBysk6GpaRTLC8zwWs=
+ github.com/bsm/ginkgo/v2 v2.12.0/go.mod h1:SwYbGRRDovPVboqFv0tPTcG1sN61LM1Z4ARdbAV9g4c=
+ github.com/bsm/gomega v1.27.10 h1:yeMWxP2pV2fG3FgAODIY8EiRE3dy0aeFYt4l7wh6yKA=
+ github.com/bsm/gomega v1.27.10/go.mod h1:JyEr/xRbxbtgWNi8tIEVPUYZ5Dzef52k01W3YH0H+O0=
++github.com/cenkalti/backoff/v5 v5.0.3 h1:ZN+IMa753KfX5hd8vVaMixjnqRZ3y8CuJKRKj1xcsSM=
++github.com/cenkalti/backoff/v5 v5.0.3/go.mod h1:rkhZdG3JZukswDf7f0cwqPNk4K0sa+F97BxZthm/crw=
+ github.com/cespare/xxhash/v2 v2.3.0 h1:UL815xU9SqsFlibzuggzjXhog7bL6oX9BbNZnL2UFvs=
+ github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XLFGgcrjCOs=
++github.com/felixge/httpsnoop v1.1.0 h1:3YtUj32ZZkqZtt3sZZsClsymw/QDuVfpNhoA31zeORc=
++github.com/felixge/httpsnoop v1.1.0/go.mod h1:Zqxgdd+1Rkcz8euOqdr7lqgCRJztwr5hp9vDSi5UZCE=
++github.com/go-logr/logr v1.2.2/go.mod h1:jdQByPbusPIv2/zmleS9BjJVeZ6kBagPoEUsqbVz/1A=
++github.com/go-logr/logr v1.4.4 h1:tG4xh9yMsRCAiodLVTxyrkzSZ9+o0L1Kg/+cPVcbP/8=
++github.com/go-logr/logr v1.4.4/go.mod h1:9T104GzyrTigFIr8wt5mBrctHMim0Nb2HLGrmQ40KvY=
++github.com/go-logr/stdr v1.2.2 h1:hSWxHoqTgW2S2qGc0LTAI563KZ5YKYRhT3MFKZMbjag=
++github.com/go-logr/stdr v1.2.2/go.mod h1:mMo/vtBO5dYbehREoey6XUKy/eSumjCCveDpRre4VKE=
+ github.com/go-sql-driver/mysql v1.10.2 h1:5TRvGvczDohUMOCRA5aCAXgfSZOo/oNDSFD/2RrChS0=
+ github.com/go-sql-driver/mysql v1.10.2/go.mod h1:M+cqaI7+xxXGG9swrdeUIoPG3Y3KCkF0pZej+SK+nWk=
++github.com/golang/protobuf v1.5.4 h1:i7eJL8qZTpSEXOPTxNKhASYpMn+8e5Q6AdndVa1dWek=
++github.com/golang/protobuf v1.5.4/go.mod h1:lnTiLA8Wa4RWRcIUkrtSVa5nRhsEGBg48fD6rSs7xps=
+ github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
+ github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
++github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=
++github.com/google/uuid v1.6.0/go.mod h1:TIyPZe4MgqvfeYDBFedMoGGpEw/LqOeaOT+nhxU+yHo=
++github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0 h1:/Tnpcb2E0Pz/tN9s3bfEY2Q8ePCEX9iuS+cneUwncnw=
++github.com/grpc-ecosystem/grpc-gateway/v2 v2.30.0/go.mod h1:zOBXOsUaBSjKgmH4OGzV1esUpR3oUSCPYVd2cUBjKYY=
+ github.com/klauspost/compress v1.20.1 h1:T7kKElXUMXrUJ2E9QhQhxFtcK5rPyLdsGZvdbLMPdiQ=
+ github.com/klauspost/compress v1.20.1/go.mod h1:LUdAzn7YLVvxLpc7y3V1m40wESHTgc1422pwwBSKYuI=
+ github.com/klauspost/cpuid/v2 v2.4.0 h1:S6Hrbc7+ywsr0r+RLapfGBHfyefhCTwEh3A0tV913Dw=
+@@ -28,12 +45,38 @@ github.com/prometheus/common v0.72.0 h1:tAYsE+sPJxIncDAobm4H5aQjmox9ZxEIIqPbiffa
+ github.com/prometheus/common v0.72.0/go.mod h1:77NWqAQ2tXT7BIK40qjJdw5Acrsrg1TlHAnsQi3i6mk=
+ github.com/prometheus/procfs v0.22.0 h1:6q9+/JL9IKAPbCmBrv9n5O5Ty3NKnciV5X7YGw0oics=
+ github.com/prometheus/procfs v0.22.0/go.mod h1:CvmFr/GVhIjIvWJZW3tgkODBQMRIf0EyWMQLHCHab58=
++github.com/redis/go-redis/extra/rediscmd/v9 v9.23.0 h1:YOQCtePRR/cBrxtZB5u2ueYei3zGJm1n0KB2tvth0k0=
++github.com/redis/go-redis/extra/rediscmd/v9 v9.23.0/go.mod h1:BzBb5fEjIwijUn8VVkXfQUwFTGyk2vGIVU19zv2GhsM=
++github.com/redis/go-redis/extra/redisotel/v9 v9.23.0 h1:EBQ01zUjwarZZ4IoSTQNU9EEc223eB9tpSun6n5EaUU=
++github.com/redis/go-redis/extra/redisotel/v9 v9.23.0/go.mod h1:4xBZ7QF+cd90pc58g+cXH1aLJBgOGd4Gp5BBQvNtPn0=
+ github.com/redis/go-redis/v9 v9.23.0 h1:/TTVdJa8BRNsybwwGGnmiYktHNlUXtbOQxlWpHBPL3s=
+ github.com/redis/go-redis/v9 v9.23.0/go.mod h1:EWP2UUk+XDaI1s5nQB5mablZN6vccXlmBQTyfnF87D0=
+ github.com/stretchr/testify v1.12.1 h1:EuwCh5fleGS7H32xRwO3wRGT7DxrDhLAT6FF8MpWDWE=
+ github.com/stretchr/testify v1.12.1/go.mod h1:MDEgiDPPsNp5cuIrHPPCyornHKgEVbtFUmoNlxoYthg=
+ github.com/zeebo/xxh3 v1.1.0 h1:s7DLGDK45Dyfg7++yxI0khrfwq9661w9EN78eP/UZVs=
+ github.com/zeebo/xxh3 v1.1.0/go.mod h1:IisAie1LELR4xhVinxWS5+zf1lA4p0MW4T+w+W07F5s=
++go.opentelemetry.io/auto/sdk v1.2.1 h1:jXsnJ4Lmnqd11kwkBV2LgLoFMZKizbCi5fNZ/ipaZ64=
++go.opentelemetry.io/auto/sdk v1.2.1/go.mod h1:KRTj+aOaElaLi+wW1kO/DZRXwkF4C5xPbEe3ZiIhN7Y=
++go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0 h1:LxwW/9ctSCv+QkE/cLR7M91ZIkXNMqJtEMi1vCw9U8s=
++go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.72.0/go.mod h1:tOsftB4SslBwwErVEPaenU2RpThXWPIU8DoJHEC4dyw=
++go.opentelemetry.io/otel v1.47.0 h1:j7ALJ/zgkS7Z6aeJW09p8VC9804bC+PpeTfCD4XPnOM=
++go.opentelemetry.io/otel v1.47.0/go.mod h1:8wS9O2qfXrYrzp6hIF/HOYJJf/wIhFPhR2xLuP+iXQU=
++go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.47.0 h1:julhjPeUH/q/7hinbSdDdqt5h7Zw9YWmRlWRhI0jd54=
++go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.47.0/go.mod h1:Ao2mz688LH/tFf0yMAenidq6k2YNSx6SIY2q6jDACck=
++go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.47.0 h1:UFpxOpYPmMNUtOWhdb+nC1WELIgVf8z9higURrbzYU4=
++go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.47.0/go.mod h1:YBGjxe3lt0jtXoEXxGrGhv/jM7oUBUDVK7zhAvNyEjc=
++go.opentelemetry.io/otel/log v1.47.0 h1:cOTS1CcLbSQeZKanGJ+0JpF/+t4PELi3O3bbl2lqCcI=
++go.opentelemetry.io/otel/log v1.47.0/go.mod h1:9byitSQ5pLC6PpqwGXjqdMKya6ZTswHRZh2vvXT33nw=
++go.opentelemetry.io/otel/metric v1.47.0 h1:4PptaldXx3Eat1XjMZ68pPJEs5wrhlemctZE9a3UdWY=
++go.opentelemetry.io/otel/metric v1.47.0/go.mod h1:ADGSXxRrXM6bjbvLo535EstVFlPpPYZm4LBKixjDHwU=
++go.opentelemetry.io/otel/sdk v1.47.0 h1:zWXEr4j2lFefG87TU6Yg8a7ngfohIKFZHKp0Hf5hC6I=
++go.opentelemetry.io/otel/sdk v1.47.0/go.mod h1:VUc24kiOeoGsxG8G9ULx3fWKvB7jMhnGE8Oi607lgR0=
++go.opentelemetry.io/otel/sdk/metric v1.47.0 h1:lfISg2j93VT6yqdk9OfUaZmw/GfcZqCCV3jdXtsPnKw=
++go.opentelemetry.io/otel/sdk/metric v1.47.0/go.mod h1:ypLp+mW1Nt2x+Szt3b5/i1syodyts49lMOwxpDI3VGw=
++go.opentelemetry.io/otel/trace v1.47.0 h1:JOjX/Oci8K94QHddo+bbfya/Ai/nf6/dt9ZfrFNWSrM=
++go.opentelemetry.io/otel/trace v1.47.0/go.mod h1:jNaSLa2PZEYFG6fRjJABAu+bw4FS08uDmPg28lTghu0=
++go.opentelemetry.io/proto/otlp v1.11.0 h1:5rrYs0Ykyj50sdU/JU0x8etU+LubXWb+gED6TbEdMIk=
++go.opentelemetry.io/proto/otlp v1.11.0/go.mod h1:SmVizdCOAm3XBtG1g1NnOdhW6jtddT72hLMhv8VwA8E=
+ go.uber.org/atomic v1.12.0 h1:BvcXdFKuviU4fTL/f+SxdQ5qJX/Jix8pAkgdUcb3XOE=
+ go.uber.org/atomic v1.12.0/go.mod h1:I6c4cg+6HCxRjfjSsYtApoFILnpc0CGUdGkXVqbYVNk=
+ go.uber.org/goleak v1.3.0 h1:2K3zAYmnTNqV73imy9J1T3WC+gmCePx2hEGkimedGto=
+@@ -42,7 +85,19 @@ go.yaml.in/yaml/v2 v2.4.4 h1:tuyd0P+2Ont/d6e2rl3be67goVK4R6deVxCUX5vyPaQ=
+ go.yaml.in/yaml/v2 v2.4.4/go.mod h1:gMZqIpDtDqOfM0uNfy0SkpRhvUryYH0Z6wdMYcacYXQ=
+ go.yaml.in/yaml/v3 v3.0.5 h1:N6y/pJk8buWs9NY5ERU2HSMfm+IuD/OtfdAnq6kESPw=
+ go.yaml.in/yaml/v3 v3.0.5/go.mod h1:HVTZu1O7/Vkt2N+BFy8Zza+lnLsABggaTM2ZpNIGuKg=
++golang.org/x/net v0.59.0 h1:5zfYln+w5XCxwrnMMJPufRgNoXEaGxl0wo5GqPXyues=
++golang.org/x/net v0.59.0/go.mod h1:2DA/G1UfVbCpQPeWTmMPGY7Cs2PkBkwu743bVX5PIVg=
+ golang.org/x/sys v0.48.0 h1:bbX/i/6MgT9BVLM9RT1thmxL04yeTAhbEz4SyadbXoo=
+ golang.org/x/sys v0.48.0/go.mod h1:hNLxWAXmnKAxqDtdwIYC4bM9oQPEecfsnNMuSxOs3og=
++golang.org/x/text v0.42.0 h1:JbOZXgfeCPU9gacVtYliJqOhD+zhrEqK4LfdpmlUZqI=
++golang.org/x/text v0.42.0/go.mod h1:ojzP1Z+2QtioaF8DTtO8K5q7JWVVYwZKenzujK0Zd0E=
++gonum.org/v1/gonum v0.17.0 h1:VbpOemQlsSMrYmn7T2OUvQ4dqxQXU+ouZFQsZOx50z4=
++gonum.org/v1/gonum v0.17.0/go.mod h1:El3tOrEuMpv2UdMrbNlKEh9vd86bmQ6vqIcDwxEOc1E=
++google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc h1:rZHRz0ogq4Pid1IKtA/ivHi8XONVF5tqUQXA2TtgpkE=
++google.golang.org/genproto/googleapis/api v0.0.0-20260928230214-8a89bd6388cc/go.mod h1:K/n0XLazCJHjD73YuMyNJsN38BPPy1kfFnKxUXaThFU=
++google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc h1:4bNTbnb44EqGVy9HaQxSY2jnafSUdgV3qHtedvNpDKg=
++google.golang.org/genproto/googleapis/rpc v0.0.0-20260928230214-8a89bd6388cc/go.mod h1:OaIUM3+LpYcK2GXM4FTmhWoIq371Owdr+Cc7/BsYHHc=
++google.golang.org/grpc v1.83.2 h1:EManeRomTObA0BU7I8vXgg/78uE5MJ9M8B39EX2WscU=
++google.golang.org/grpc v1.83.2/go.mod h1:YPI1hK3kDked6iHvgX3tR0y+nX/qpMFKhPgFsokw1S8=
+ google.golang.org/protobuf v1.36.12 h1:pJOKDDOyeXErUroCihFAd5LQuwXBSpVnKGrj5o/fwxc=
+ google.golang.org/protobuf v1.36.12/go.mod h1:HTf+CrKn2C3g5S8VImy6tdcUvCska2kB7j23XfzDpco=
+diff --git a/app/handlers.go b/app/handlers.go
+index 54d62e1..95f6afb 100644
+--- a/app/handlers.go
++++ b/app/handlers.go
+@@ -15,6 +15,9 @@ import (
+ 	"time"
+ 
+ 	"github.com/prometheus/client_golang/prometheus/promhttp"
++	"go.opentelemetry.io/otel/attribute"
++	"go.opentelemetry.io/otel/codes"
++	"go.opentelemetry.io/otel/trace"
+ )
+ 
+ const productsCacheKey = "mall:products"
+@@ -72,6 +75,10 @@ func (a *App) middleware(next *http.ServeMux) http.Handler {
+ 		}
+ 		w.Header().Set("X-Request-ID", reqID)
+ 		w.Header().Set("X-Mall-Version", a.cfg.Version)
++		if sc := trace.SpanContextFromContext(r.Context()); sc.IsValid() {
++			// 把 trace_id 回给调用方：用户报障时贴出这个值，就能在 Jaeger 里直接打开这条链路。
++			w.Header().Set("X-Trace-ID", sc.TraceID().String())
++		}
+ 
+ 		a.metrics.httpInflight.Inc()
+ 		defer a.metrics.httpInflight.Dec()
+@@ -84,6 +91,18 @@ func (a *App) middleware(next *http.ServeMux) http.Handler {
+ 		if route == "" {
+ 			route = "unmatched"
+ 		}
++		// 链路追踪：span 名改成路由模板，记下 request_id，5xx 标记为错误。
++		// 没启用追踪时 span 是空实现，这几行什么都不做。
++		span := trace.SpanFromContext(r.Context())
++		span.SetName(route)
++		span.SetAttributes(
++			attribute.String("http.route", route),
++			attribute.String("mall.request_id", reqID),
++		)
++		if rec.status >= 500 {
++			span.SetStatus(codes.Error, http.StatusText(rec.status))
++		}
++
+ 		dur := time.Since(start)
+ 		a.metrics.httpRequests.WithLabelValues(r.Method, route, strconv.Itoa(rec.status)).Inc()
+ 		a.metrics.httpDuration.WithLabelValues(r.Method, route).Observe(dur.Seconds())
+@@ -198,7 +217,7 @@ func (a *App) handleListProducts(w http.ResponseWriter, r *http.Request) {
+ 
+ 	products, err := a.store.ListProducts(ctx)
+ 	if err != nil {
+-		a.log.Error("list products failed", "err", err)
++		a.log.ErrorContext(ctx, "list products failed", "err", err)
+ 		writeError(w, http.StatusInternalServerError, "database error")
+ 		return
+ 	}
+@@ -254,7 +273,7 @@ func (a *App) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
+ 		writeError(w, http.StatusConflict, "insufficient stock")
+ 		return
+ 	case err != nil:
+-		a.log.Error("create order failed", "err", err)
++		a.log.ErrorContext(r.Context(), "create order failed", "err", err)
+ 		writeError(w, http.StatusInternalServerError, "database error")
+ 		return
+ 	}
+@@ -263,7 +282,7 @@ func (a *App) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
+ 	if err := a.cache.Del(r.Context(), productsCacheKey); err != nil {
+ 		a.log.Warn("cache del failed", "err", err)
+ 	}
+-	a.log.Info("order created", "order_id", o.ID, "product_id", o.ProductID, "quantity", o.Quantity, "amount_cents", o.AmountCents)
++	a.log.InfoContext(r.Context(), "order created", "order_id", o.ID, "product_id", o.ProductID, "quantity", o.Quantity, "amount_cents", o.AmountCents)
+ 	writeJSON(w, http.StatusCreated, o)
+ }
+ 
+diff --git a/app/main.go b/app/main.go
+index 56fdcf9..777fddf 100644
+--- a/app/main.go
++++ b/app/main.go
+@@ -13,6 +13,8 @@ import (
+ 	"os/signal"
+ 	"syscall"
+ 	"time"
++
++	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+ )
+ 
+ // version 在构建时通过 -ldflags "-X main.version=v1.0.0" 注入，也可以用 MALL_VERSION 覆盖。
+@@ -23,6 +25,12 @@ func main() {
+ 	logger := newLogger(cfg.LogLevel)
+ 	slog.SetDefault(logger)
+ 
++	shutdownTracing, err := setupTracing(context.Background(), cfg.Version)
++	if err != nil {
++		logger.Error("init tracing failed", "err", err)
++		os.Exit(1)
++	}
++
+ 	store, err := newSQLStore(cfg.DBDSN)
+ 	if err != nil {
+ 		logger.Error("init database failed", "err", err)
+@@ -45,7 +53,7 @@ func main() {
+ 
+ 	srv := &http.Server{
+ 		Addr:              cfg.Listen,
+-		Handler:           app.routes(),
++		Handler:           withTracing(app.routes()),
+ 		ReadHeaderTimeout: 5 * time.Second,
+ 		ReadTimeout:       15 * time.Second,
+ 		WriteTimeout:      60 * time.Second,
+@@ -71,6 +79,9 @@ func main() {
+ 	if err := srv.Shutdown(ctx); err != nil {
+ 		logger.Error("graceful shutdown failed", "err", err)
+ 	}
++	if err := shutdownTracing(context.Background()); err != nil {
++		logger.Error("flush traces failed", "err", err)
++	}
+ 	logger.Info("bye")
+ }
+ 
+@@ -81,5 +92,19 @@ func newLogger(level string) *slog.Logger {
+ 	}
+ 	// JSON 日志输出到标准输出：systemd 交给 journald，容器里交给容器运行时，方便日志实验采集。
+ 	h := slog.NewJSONHandler(os.Stdout, &slog.HandlerOptions{Level: lv})
+-	return slog.New(h).With("service", "mall-api")
++	return slog.New(traceHandler{h}).With("service", "mall-api")
++}
++
++// withTracing 在最外层创建服务端 span，并从请求头 traceparent 里接上网关的链路。
++// 探针和指标抓取不产生 span，免得 Jaeger 里全是 /healthz。
++func withTracing(h http.Handler) http.Handler {
++	return otelhttp.NewHandler(h, "mall-api",
++		otelhttp.WithFilter(func(r *http.Request) bool {
++			switch r.URL.Path {
++			case "/healthz", "/readyz", "/metrics":
++				return false
++			}
++			return true
++		}),
++	)
+ }
+diff --git a/app/store.go b/app/store.go
+index 76c9a58..ee28ab6 100644
+--- a/app/store.go
++++ b/app/store.go
+@@ -7,8 +7,11 @@ import (
+ 	"errors"
+ 	"time"
+ 
++	"github.com/XSAM/otelsql"
+ 	_ "github.com/go-sql-driver/mysql"
++	"github.com/redis/go-redis/extra/redisotel/v9"
+ 	"github.com/redis/go-redis/v9"
++	"go.opentelemetry.io/otel/attribute"
+ )
+ 
+ type Product struct {
+@@ -46,7 +49,10 @@ type sqlStore struct{ db *sql.DB }
+ // newSQLStore 不会在启动时连接数据库（sql.Open 是惰性的），
+ // 数据库暂时不可用时服务照样能启动，由 /readyz 报告未就绪。
+ func newSQLStore(dsn string) (*sqlStore, error) {
+-	db, err := sql.Open("mysql", dsn)
++	// otelsql 给每条 SQL 生成一个子 span，链路里能看到“慢在哪条 SQL”。
++	db, err := otelsql.Open("mysql", dsn,
++		otelsql.WithAttributes(attribute.String("db.system.name", "mysql")),
++	)
+ 	if err != nil {
+ 		return nil, err
+ 	}
+@@ -157,13 +163,16 @@ func (noopCache) Enabled() bool                                         { return
+ type redisCache struct{ c *redis.Client }
+ 
+ func newRedisCache(addr, password string) *redisCache {
+-	return &redisCache{c: redis.NewClient(&redis.Options{
++	c := redis.NewClient(&redis.Options{
+ 		Addr:         addr,
+ 		Password:     password,
+ 		DialTimeout:  2 * time.Second,
+ 		ReadTimeout:  time.Second,
+ 		WriteTimeout: time.Second,
+-	})}
++	})
++	// 每个 Redis 命令生成一个子 span。
++	_ = redisotel.InstrumentTracing(c)
++	return &redisCache{c: c}
+ }
+ 
+ func (r *redisCache) Enabled() bool { return true }
+diff --git a/app/tracing.go b/app/tracing.go
+new file mode 100644
+index 0000000..aad09ea
+--- /dev/null
++++ b/app/tracing.go
+@@ -0,0 +1,84 @@
++package main
++
++import (
++	"context"
++	"log/slog"
++	"os"
++
++	"go.opentelemetry.io/otel"
++	"go.opentelemetry.io/otel/attribute"
++	"go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc"
++	"go.opentelemetry.io/otel/propagation"
++	"go.opentelemetry.io/otel/sdk/resource"
++	sdktrace "go.opentelemetry.io/otel/sdk/trace"
++	"go.opentelemetry.io/otel/trace"
++)
++
++// setupTracing 初始化 OpenTelemetry 链路追踪（SRE-1 课后作业）。
++//
++// 只有设置了 OTEL_EXPORTER_OTLP_ENDPOINT（如 http://otel-collector.monitoring.svc:4317）才启用；
++// 不设置时什么都不做，行为和改造前完全一样。
++// 采样率、服务名等都用 OpenTelemetry 标准环境变量控制：
++//
++//	OTEL_SERVICE_NAME=mall-api
++//	OTEL_TRACES_SAMPLER=parentbased_traceidratio
++//	OTEL_TRACES_SAMPLER_ARG=0.1
++func setupTracing(ctx context.Context, version string) (func(context.Context) error, error) {
++	// 不管是否导出，都注册 W3C traceparent 传播器：网关传进来的 trace 上下文能继续往下传。
++	otel.SetTextMapPropagator(propagation.NewCompositeTextMapPropagator(
++		propagation.TraceContext{}, propagation.Baggage{},
++	))
++
++	if os.Getenv("OTEL_EXPORTER_OTLP_ENDPOINT") == "" && os.Getenv("OTEL_EXPORTER_OTLP_TRACES_ENDPOINT") == "" {
++		return func(context.Context) error { return nil }, nil
++	}
++
++	exp, err := otlptracegrpc.New(ctx) // 读取 OTEL_EXPORTER_OTLP_* 环境变量
++	if err != nil {
++		return nil, err
++	}
++
++	res, err := resource.New(ctx,
++		resource.WithAttributes(
++			attribute.String("service.name", "mall-api"),
++			attribute.String("service.version", version),
++		),
++		resource.WithFromEnv(), // OTEL_SERVICE_NAME / OTEL_RESOURCE_ATTRIBUTES 可以覆盖上面的值
++		resource.WithHost(),
++		resource.WithTelemetrySDK(),
++	)
++	if err != nil {
++		return nil, err
++	}
++
++	tp := sdktrace.NewTracerProvider(
++		sdktrace.WithBatcher(exp), // 批量异步发送，不阻塞请求
++		sdktrace.WithResource(res),
++		// 不显式设置 Sampler：SDK 默认读 OTEL_TRACES_SAMPLER，未设置时是 parentbased_always_on，
++		// 也就是“网关采样了我就采样”，保证一条链路要么完整、要么都不要。
++	)
++	otel.SetTracerProvider(tp)
++	return tp.Shutdown, nil
++}
++
++// traceHandler 包一层 slog.Handler：日志带上 context 时，自动加上 trace_id / span_id 字段，
++// 这样在 Loki / Kibana 里按 trace_id 就能搜到这条链路上的所有日志。
++type traceHandler struct{ slog.Handler }
++
++func (h traceHandler) Handle(ctx context.Context, r slog.Record) error {
++	if sc := trace.SpanContextFromContext(ctx); sc.IsValid() {
++		r.AddAttrs(
++			slog.String("trace_id", sc.TraceID().String()),
++			slog.String("span_id", sc.SpanID().String()),
++		)
++	}
++	return h.Handler.Handle(ctx, r)
++}
++
++func (h traceHandler) WithAttrs(attrs []slog.Attr) slog.Handler {
++	return traceHandler{h.Handler.WithAttrs(attrs)}
++}
++
++func (h traceHandler) WithGroup(name string) slog.Handler {
++	return traceHandler{h.Handler.WithGroup(name)}
++}

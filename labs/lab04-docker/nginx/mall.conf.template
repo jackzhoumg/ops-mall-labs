@@ -1,0 +1,47 @@
+# mall-web 站点配置模板。容器启动时由官方镜像的 envsubst 渲染成 /etc/nginx/conf.d/mall.conf
+# ${MALL_API_UPSTREAM} ${NGINX_RESOLVER} 来自环境变量，其余 $xxx 是 nginx 自己的变量
+
+# 和 Lab 03 一致的 ops 日志格式：最后一列是请求耗时，nginx_log_stats.sh 能直接统计
+log_format ops '$remote_addr - $remote_user [$time_local] "$request" '
+               '$status $body_bytes_sent "$http_referer" "$http_user_agent" '
+               '$upstream_response_time $request_time';
+
+server {
+    listen 80;
+    server_name _;
+
+    # 官方镜像把 access.log 软链到 stdout，docker logs 能看到
+    access_log /var/log/nginx/access.log ops;
+
+    root /usr/share/nginx/html;
+
+    # 用 Docker 内置 DNS 动态解析后端：mall-api 容器重建后 IP 变了，10 秒内自动跟上
+    # 如果直接写 proxy_pass http://mall-api:8080，nginx 只在启动时解析一次，后端重建就 502
+    resolver ${NGINX_RESOLVER} valid=10s ipv6=off;
+    set $mall_api http://${MALL_API_UPSTREAM};
+
+    location / {
+        try_files $uri /index.html;
+    }
+
+    location /api/ {
+        # proxy_pass 用变量且不带 URI 时，原样转发请求路径
+        proxy_pass $mall_api;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Request-ID $request_id;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 30s;
+    }
+
+    # 给 HEALTHCHECK 用，只说明 nginx 活着
+    location = /nginx-health {
+        access_log off;
+        default_type text/plain;
+        return 200 "ok\n";
+    }
+}

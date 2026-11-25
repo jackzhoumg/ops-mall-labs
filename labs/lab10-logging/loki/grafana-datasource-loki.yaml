@@ -1,0 +1,47 @@
+# Lab 10：给 Lab 09 的 Grafana 加 Loki 数据源（每个租户一个）
+# 带 grafana_datasource=1 标签的 ConfigMap 会被 Grafana 的 datasource sidecar 自动导入。
+# 这个 sidecar 默认只看 Grafana 所在的命名空间，所以 ConfigMap 放在 monitoring。
+#
+# 多租户的关键：查询时带 X-Scope-OrgID 请求头，Loki 只返回这个租户的数据。
+# Grafana 开源版不能按数据源给用户授权，真正的权限隔离要靠：每个业务线一个 Grafana 组织（Organization），
+# 组织里只配本业务线的数据源；或者在 loki-gateway 上按用户映射租户。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: loki-datasources
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  loki-datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Loki-mall
+        uid: loki-mall
+        type: loki
+        access: proxy
+        url: http://loki-gateway.logging.svc.cluster.local
+        jsonData:
+          maxLines: 1000
+          httpHeaderName1: X-Scope-OrgID
+          # 日志里的 request_id 做成可点击的链接，点一下就查这次请求的所有日志
+          derivedFields:
+            - name: request_id
+              matcherRegex: '"request_id":"([0-9a-zA-Z-]+)"'
+              # 配了 datasourceUid 就是内部链接，url 里写的是要执行的 LogQL。
+              # Grafana 会展开 provisioning 文件里的 $变量，字面量 $ 要写成 $$
+              url: '{job=~".+"} |= "$${__value.raw}"'
+              urlDisplayLabel: 查这次请求的全部日志
+              datasourceUid: loki-mall
+        secureJsonData:
+          httpHeaderValue1: mall
+      - name: Loki-platform
+        uid: loki-platform
+        type: loki
+        access: proxy
+        url: http://loki-gateway.logging.svc.cluster.local
+        jsonData:
+          maxLines: 1000
+          httpHeaderName1: X-Scope-OrgID
+        secureJsonData:
+          httpHeaderValue1: platform

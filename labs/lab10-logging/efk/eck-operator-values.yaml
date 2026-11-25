@@ -1,0 +1,14 @@
+# Lab 10（选做）：ECK Operator 的 Helm values
+# 用法（k8s-master）：
+#   helm repo add elastic https://helm.elastic.co && helm repo update
+#   helm upgrade --install elastic-operator elastic/eck-operator --version 3.5.0 \
+#     -n elastic-system --create-namespace -f efk/eck-operator-values.yaml
+resources:
+  requests:
+    cpu: 50m
+    memory: 150Mi
+  limits:
+    memory: 512Mi
+# 只管理 logging 命名空间里的 Elastic 资源
+managedNamespaces:
+  - logging

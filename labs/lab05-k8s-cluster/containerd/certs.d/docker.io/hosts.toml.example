@@ -1,0 +1,7 @@
+# Docker Hub 加速示例：复制到 /etc/containerd/certs.d/docker.io/hosts.toml 并把地址换成你自己的镜像加速地址
+# （云厂商容器镜像服务给的专属加速地址，或自建的 Harbor 代理缓存项目）
+# 国内公共加速地址经常停服，不要写死在脚本里
+server = "https://registry-1.docker.io"
+
+[host."https://your-mirror.example.com"]
+  capabilities = ["pull", "resolve"]

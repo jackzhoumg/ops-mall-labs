@@ -1,0 +1,166 @@
+# Lab 09：告警规则单元测试（promtool test rules）
+# 规则写在 PrometheusRule CRD 里，promtool 只认原生规则文件，所以先用 run-rule-tests.sh 把 .spec 抽出来放到 build/。
+# 思路：用 input_series 造一段"假监控数据"，断言某个时间点应该有哪些告警在 firing。
+rule_files:
+  - build/mall-api.rules.yaml
+  - build/infra.rules.yaml
+
+evaluation_interval: 30s
+
+tests:
+  # 1. 错误率 33%：critical（>5%，for 2m）和 warning（>1%，for 5m）两档都应触发
+  - interval: 1m
+    input_series:
+      - series: 'mall_http_requests_total{job="mall-api", namespace="mall", method="GET", route="GET /api/products", status="200"}'
+        values: '0+120x20'
+      - series: 'mall_http_requests_total{job="mall-api", namespace="mall", method="GET", route="GET /api/debug/error", status="500"}'
+        values: '0+60x20'
+      # 探针请求很多，但被排除在业务流量之外，不影响错误率
+      - series: 'mall_http_requests_total{job="mall-api", namespace="mall", method="GET", route="GET /healthz", status="200"}'
+        values: '0+600x20'
+      - series: 'up{job="mall-api", namespace="mall", pod="mall-api-0"}'
+        values: '1x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MallApiHighErrorRate
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: mall
+              job: mall-api
+            exp_annotations:
+              summary: "mall mall-api 5xx 错误率 33.33%"
+              description: "最近 5 分钟 5xx 比例超过 5%，已持续 2 分钟。先看最近有没有发布，再看 MySQL / Redis。"
+          - exp_labels:
+              severity: warning
+              namespace: mall
+              job: mall-api
+            exp_annotations:
+              summary: "mall mall-api 5xx 错误率 33.33%"
+              description: "最近 5 分钟 5xx 比例超过 1%，已持续 5 分钟。"
+      # 只有 2 分钟时 critical 的 for 还没满足，不应该有任何告警
+      - eval_time: 2m
+        alertname: MallApiHighErrorRate
+        exp_alerts: []
+      - eval_time: 10m
+        alertname: MallApiDown
+        exp_alerts: []
+
+  # 2. 流量太小（每分钟 3 个请求）时，就算全是 500 也不报错误率，避免半夜误报
+  - interval: 1m
+    input_series:
+      - series: 'mall_http_requests_total{job="mall-api", namespace="mall", method="GET", route="GET /api/debug/error", status="500"}'
+        values: '0+3x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MallApiHighErrorRate
+        exp_alerts: []
+
+  # 3. mall 命名空间一个健康实例都没有（只有 staging 的数据）→ MallApiDown
+  - interval: 1m
+    input_series:
+      - series: 'up{job="mall-api", namespace="mall-staging", pod="mall-api-0"}'
+        values: '1x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: MallApiDown
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: mall
+            exp_annotations:
+              summary: "mall-api 在 mall 命名空间没有任何健康实例"
+              description: "连续 2 分钟没有一个 mall-api 实例能被抓到指标，商城接口基本不可用。先看 kubectl -n mall get pod,svc,endpointslice。"
+
+  # 4. 1/3 请求耗时 2~2.5 秒：P99 落在 2.5 秒的桶里，critical 触发
+  - interval: 1m
+    input_series:
+      - series: 'mall_http_requests_total{job="mall-api", namespace="mall", method="GET", route="GET /api/products", status="200"}'
+        values: '0+120x20'
+      - series: 'mall_http_request_duration_seconds_bucket{job="mall-api", namespace="mall", method="GET", route="GET /api/debug/slow", le="1"}'
+        values: '0+80x20'
+      - series: 'mall_http_request_duration_seconds_bucket{job="mall-api", namespace="mall", method="GET", route="GET /api/debug/slow", le="2.5"}'
+        values: '0+120x20'
+      - series: 'mall_http_request_duration_seconds_bucket{job="mall-api", namespace="mall", method="GET", route="GET /api/debug/slow", le="+Inf"}'
+        values: '0+120x20'
+    alert_rule_test:
+      - eval_time: 10m
+        alertname: MallApiHighLatency
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              namespace: mall
+              job: mall-api
+            exp_annotations:
+              summary: "mall mall-api P99 延迟 2.455s"
+              description: "P99 超过 2 秒已持续 3 分钟，用户明显感觉卡顿。看 Grafana 大盘按路由拆分的延迟，找出慢接口。"
+          - exp_labels:
+              severity: warning
+              namespace: mall
+              job: mall-api
+            exp_annotations:
+              summary: "mall mall-api P95 延迟 2.275s"
+              description: "P95 超过 500ms 已持续 5 分钟。"
+
+  # 5. 磁盘每小时少 1GiB，总共 20GiB 剩 6GiB（30%）：预测 24 小时内写满
+  - interval: 1m
+    input_series:
+      - series: 'node_filesystem_avail_bytes{job="vm-node", hostname="lab-db1", instance="192.168.56.13:9100", mountpoint="/", fstype="xfs", device="/dev/sda1"}'
+        values: '12884901888-17895697x480'
+      - series: 'node_filesystem_size_bytes{job="vm-node", hostname="lab-db1", instance="192.168.56.13:9100", mountpoint="/", fstype="xfs", device="/dev/sda1"}'
+        values: '21474836480x480'
+      - series: 'node_filesystem_readonly{job="vm-node", hostname="lab-db1", instance="192.168.56.13:9100", mountpoint="/", fstype="xfs", device="/dev/sda1"}'
+        values: '0x480'
+    alert_rule_test:
+      - eval_time: 7h
+        alertname: HostDiskWillFillIn24h
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: vm-node
+              hostname: lab-db1
+              instance: "192.168.56.13:9100"
+              mountpoint: /
+              fstype: xfs
+              device: /dev/sda1
+            exp_annotations:
+              summary: "lab-db1 分区 / 预计 24 小时内写满"
+              description: "按最近 6 小时的写入速度推算，24 小时内会写满。查日志是否没轮转、备份文件是否没清理。"
+
+  # 6. MySQL 8.4 的列名（seconds_behind_source）也能被识别；延迟 400 秒 → 两档都触发
+  - interval: 1m
+    input_series:
+      - series: 'mysql_slave_status_seconds_behind_source{job="vm-mysql", hostname="lab-db2", instance="192.168.56.14:9104", channel_name="", connection_name="", master_host="192.168.56.13", master_uuid="x"}'
+        values: '400x10'
+      - series: 'mysql_slave_status_replica_io_running{job="vm-mysql", hostname="lab-db2", instance="192.168.56.14:9104", channel_name="", connection_name="", master_host="192.168.56.13", master_uuid="x"}'
+        values: '1x10'
+      - series: 'mysql_slave_status_replica_sql_running{job="vm-mysql", hostname="lab-db2", instance="192.168.56.14:9104", channel_name="", connection_name="", master_host="192.168.56.13", master_uuid="x"}'
+        values: '0x10'
+    alert_rule_test:
+      - eval_time: 5m
+        alertname: MysqlReplicationLag
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              hostname: lab-db2
+              instance: "192.168.56.14:9104"
+            exp_annotations:
+              summary: "lab-db2 主从延迟 400 秒"
+              description: "从库落后主库超过 5 分钟，读从库的业务会读到旧数据。"
+          - exp_labels:
+              severity: warning
+              hostname: lab-db2
+              instance: "192.168.56.14:9104"
+            exp_annotations:
+              summary: "lab-db2 主从延迟 400 秒"
+              description: "从库落后主库超过 30 秒。常见原因：主库大事务、从库机器性能差、从库上有慢查询。"
+      - eval_time: 5m
+        alertname: MysqlReplicationNotRunning
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              hostname: lab-db2
+              instance: "192.168.56.14:9104"
+            exp_annotations:
+              summary: "lab-db2 MySQL 复制线程停了"
+              description: "IO 或 SQL 线程不在运行，从库不再同步主库数据。在从库执行 SHOW REPLICA STATUS\\G 看 Last_IO_Error / Last_SQL_Error。"

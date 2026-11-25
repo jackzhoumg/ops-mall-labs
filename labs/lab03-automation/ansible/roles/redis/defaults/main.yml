@@ -1,0 +1,16 @@
+# Rocky Linux 9 AppStream 自带的 redis 包（写作时 6.2.x），配置文件 /etc/redis/redis.conf
+redis_conf: /etc/redis/redis.conf
+# 只监听本机和内网地址，不要监听 0.0.0.0 暴露到公网
+redis_bind: "127.0.0.1 {{ ansible_host }}"
+redis_maxmemory: 256mb
+redis_maxmemory_policy: allkeys-lru
+
+# 用 lineinfile 只改关键配置项，保留发行版自带的其余默认值
+redis_settings:
+  - { key: bind, value: "{{ redis_bind }}" }
+  - { key: port, value: "{{ redis_port }}" }
+  - { key: protected-mode, value: "yes" }
+  - { key: requirepass, value: "{{ redis_password }}" }
+  - { key: maxmemory, value: "{{ redis_maxmemory }}" }
+  - { key: maxmemory-policy, value: "{{ redis_maxmemory_policy }}" }
+  - { key: appendonly, value: "yes" }

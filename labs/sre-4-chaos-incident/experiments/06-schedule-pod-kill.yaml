@@ -1,0 +1,23 @@
+# 进阶：常态化演练。工作日白天每 30 分钟随机杀 1 个 mall-api Pod（只在实验 / 预发环境这么做）。
+# 不需要时：kubectl -n mall delete schedule mall-api-pod-kill-daily
+apiVersion: chaos-mesh.org/v1alpha1
+kind: Schedule
+metadata:
+  name: mall-api-pod-kill-daily
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+    chaos.lab/drill: "sre-4"
+spec:
+  schedule: "*/30 10-17 * * 1-5"
+  type: PodChaos
+  historyLimit: 5
+  concurrencyPolicy: Forbid
+  podChaos:
+    action: pod-kill
+    mode: one
+    selector:
+      namespaces:
+        - mall
+      labelSelectors:
+        app.kubernetes.io/name: mall-api

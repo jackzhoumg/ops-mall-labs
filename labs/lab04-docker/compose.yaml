@@ -1,0 +1,109 @@
+# ops-mall 一键启动：mysql + redis + mall-api + mall-web
+#
+# 在 labs/lab04-docker/ 目录执行：
+#   cp .env.example .env && vi .env
+#   docker compose up -d --build
+#   docker compose ps
+#   curl http://192.168.56.15:8088/api/products
+#
+# 停止（数据卷保留）：docker compose down
+# 连数据一起删：    docker compose down -v
+
+name: ops-mall
+
+services:
+  mysql:
+    image: mysql:8.4
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?请在 .env 里设置 MYSQL_ROOT_PASSWORD}
+      # 只给健康检查用。sql/init.sql 里写死的是 MallPass123，两边必须一致
+      MALL_DB_PASSWORD: ${MALL_DB_PASSWORD:-MallPass123}
+      TZ: Asia/Shanghai
+    command:
+      - --character-set-server=utf8mb4
+      - --collation-server=utf8mb4_0900_ai_ci
+      - --skip-name-resolve
+    volumes:
+      - mysql-data:/var/lib/mysql
+      # 数据目录为空（第一次启动）时，官方镜像按文件名顺序执行这个目录里的 .sql
+      # 以后再启动不会重复执行；想重新初始化要 docker compose down -v 删掉数据卷
+      - ../../sql/init.sql:/docker-entrypoint-initdb.d/01-init.sql:ro
+    healthcheck:
+      # 用应用账号真正查一次 mall 库：初始化脚本跑完、账号建好才算健康
+      # 初始化期间官方镜像起的临时实例不监听 TCP，所以连 127.0.0.1 会失败，正好不会提前报健康
+      test: ["CMD-SHELL", "mysql -h 127.0.0.1 -umall -p\"$$MALL_DB_PASSWORD\" -e 'SELECT 1 FROM products LIMIT 1' mall >/dev/null 2>&1"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+    networks: [backend]
+
+  redis:
+    image: redis:8.4-alpine
+    restart: unless-stopped
+    # --requirepass 用 shell 形式展开环境变量，密码不写进 compose 文件
+    command: ["sh", "-c", "exec redis-server --requirepass \"$$REDIS_PASSWORD\" --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru"]
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?请在 .env 里设置 REDIS_PASSWORD}
+      # redis-cli 读这个变量做认证，健康检查不用把密码写在命令行
+      REDISCLI_AUTH: ${REDIS_PASSWORD}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli ping | grep -q PONG"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks: [backend]
+
+  mall-api:
+    build:
+      # 构建上下文是仓库根目录，dockerfile 路径相对于上下文
+      context: ../..
+      dockerfile: labs/lab04-docker/Dockerfile.api
+      args:
+        VERSION: ${MALL_VERSION:-v1.0.0}
+    image: harbor.lab.local/mall/mall-api:${MALL_VERSION:-v1.0.0}
+    restart: unless-stopped
+    environment:
+      MALL_DB_DSN: "mall:${MALL_DB_PASSWORD:-MallPass123}@tcp(mysql:3306)/mall?parseTime=true&timeout=3s"
+      MALL_REDIS_ADDR: redis:6379
+      MALL_REDIS_PASSWORD: ${REDIS_PASSWORD}
+      MALL_DEBUG: ${MALL_DEBUG:-false}
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # 只绑本机，排查时 curl 127.0.0.1:8080；对外统一走 mall-web
+    ports:
+      - "127.0.0.1:8080:8080"
+    networks: [backend, frontend]
+
+  mall-web:
+    build:
+      context: ../..
+      dockerfile: labs/lab04-docker/Dockerfile.web
+      args:
+        VERSION: ${MALL_VERSION:-v1.0.0}
+    image: harbor.lab.local/mall/mall-web:${MALL_VERSION:-v1.0.0}
+    restart: unless-stopped
+    environment:
+      MALL_API_UPSTREAM: mall-api:8080
+    depends_on:
+      mall-api:
+        condition: service_healthy
+    # lab-dev 的 80/443 留给 Harbor，商城页面用 8088
+    ports:
+      - "${MALL_WEB_PORT:-8088}:80"
+    networks: [frontend]
+
+# 前端网络只放 web 和 api，数据库不和 web 在一个网络里：mall-web 被攻破也直接连不到 MySQL
+networks:
+  frontend:
+  backend:
+
+volumes:
+  mysql-data:
+  redis-data:

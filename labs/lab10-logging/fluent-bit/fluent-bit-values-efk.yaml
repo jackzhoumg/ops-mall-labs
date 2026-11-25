@@ -1,0 +1,60 @@
+# Lab 10（选做）：在 Loki 之外，再把 mall 业务日志写一份到 Elasticsearch
+# 叠加在 fluent-bit-values.yaml 之后使用（后面的文件覆盖前面的同名字段）：
+#   helm upgrade --install fluent-bit oci://ghcr.io/fluent/helm-charts/fluent-bit --version 0.58.3 -n logging \
+#     -f fluent-bit/fluent-bit-values.yaml -f fluent-bit/fluent-bit-values-efk.yaml
+# 前提：efk/setup-es.sh 已执行，Secret logging/fluent-bit-es 已存在。
+#
+# config.outputs 是一整段字符串，覆盖时要把原来的两个 Loki 输出也带上。
+
+env:
+  - name: ES_PASSWORD
+    valueFrom:
+      secretKeyRef:
+        name: fluent-bit-es
+        key: ES_PASSWORD
+
+config:
+  outputs: |
+    [OUTPUT]
+        Name                loki
+        Match               mall.*
+        Host                loki-gateway.logging.svc.cluster.local
+        Port                80
+        Tenant_ID           mall
+        Labels              job=fluent-bit, cluster=lab, namespace=$kubernetes['namespace_name'], app=$kubernetes['labels']['app.kubernetes.io/name'], container=$kubernetes['container_name']
+        Structured_Metadata pod=$kubernetes['pod_name'], node=$kubernetes['host']
+        Remove_Keys         kubernetes, _p
+        Line_Format         json
+        Retry_Limit         10
+
+    [OUTPUT]
+        Name                loki
+        Match               kube.*
+        Host                loki-gateway.logging.svc.cluster.local
+        Port                80
+        Tenant_ID           platform
+        Labels              job=fluent-bit, cluster=lab, namespace=$kubernetes['namespace_name'], app=$kubernetes['labels']['app.kubernetes.io/name'], container=$kubernetes['container_name']
+        Structured_Metadata pod=$kubernetes['pod_name'], node=$kubernetes['host']
+        Remove_Keys         kubernetes, _p
+        Line_Format         json
+        Retry_Limit         10
+
+    # 同一条记录可以同时匹配多个输出：mall 业务日志 Loki 一份、Elasticsearch 一份
+    [OUTPUT]
+        Name                es
+        Match               mall.*
+        Host                mall-logs-es-http.logging.svc
+        Port                9200
+        HTTP_User           fluentbit
+        HTTP_Passwd         ${ES_PASSWORD}
+        # 按天建索引：mall-k8s-2026.11.24。索引名前缀 mall- 对应业务线，ILM 和权限都按这个前缀配
+        Logstash_Format     On
+        Logstash_Prefix     mall-k8s
+        Logstash_DateFormat %Y.%m.%d
+        # Elasticsearch 8 起没有 type 了，不加这行会报错
+        Suppress_Type_Name  On
+        # Pod 标签 app.kubernetes.io/name 里的点会被当成对象层级，和别的字段冲突，换成下划线
+        Replace_Dots        On
+        # 写入失败时把 Elasticsearch 返回的错误打到 Fluent Bit 日志里，排查映射冲突很有用
+        Trace_Error         On
+        Retry_Limit         10

@@ -1,0 +1,22 @@
+# Node-1：高度对比 exporter，Prometheus 抓 192.168.56.31:9701/metrics
+# 安装：sudo install -m 0755 height_check.py /usr/local/bin/height_check.py
+#       sudo cp height-check.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now height-check
+# 参考节点：填 1-2 个公共 Hoodi RPC（来源见教程 6.2），不要只信一家
+[Unit]
+Description=Ethereum node height check exporter (Node-1)
+After=network-online.target
+
+[Service]
+DynamicUser=true
+ExecStart=/usr/bin/python3 /usr/local/bin/height_check.py --serve 9701 --interval 15 \
+  --node lab-eth1=http://127.0.0.1:8545 \
+  --node lab-eth2=http://192.168.56.32:8545 \
+  --reference ethpandaops=https://rpc.hoodi.ethpandaops.io
+Restart=always
+RestartSec=5
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

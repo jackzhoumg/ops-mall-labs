@@ -1,0 +1,53 @@
+# 生产环境（命名空间 mall-prod），ArgoCD 手动同步
+# 镜像 tag 由“晋升”流程从 values-staging.yaml 复制过来，不直接用 CI 新构建的 tag
+environment: prod
+
+api:
+  # 5 个副本：按副本数做金丝雀时，20% = 1 个新版本 Pod
+  replicas: 5
+  image:
+    tag: "v1.0.0"
+  config:
+    MALL_LOG_LEVEL: info
+    MALL_DEBUG: "false"
+  resources:
+    requests:
+      cpu: 100m
+      memory: 96Mi
+    limits:
+      cpu: "1"
+      memory: 256Mi
+  pdb:
+    enabled: true
+    minAvailable: 3
+  hpa:
+    enabled: false
+    minReplicas: 5
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 70
+  sealedSecret:
+    enabled: false
+    encryptedData: {}
+  rollout:
+    enabled: true
+    trafficRouting: none
+    steps:
+      - setWeight: 20
+      # 无限期暂停，人确认没问题再 promote
+      - pause: {}
+      - setWeight: 50
+      - pause:
+          duration: 2m
+      - setWeight: 100
+
+web:
+  replicas: 2
+  image:
+    tag: "v1.0.0"
+  pdb:
+    enabled: true
+    minAvailable: 1
+
+httpRoute:
+  hostnames:
+    - mall-prod.lab.local

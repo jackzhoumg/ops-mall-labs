@@ -1,0 +1,12 @@
+# GatewayClass：声明“用哪个控制器实现网关”，相当于 IngressClass。集群级资源。
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: eg
+spec:
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+  parametersRef:
+    group: gateway.envoyproxy.io
+    kind: EnvoyProxy
+    name: lab-proxy
+    namespace: envoy-gateway-system

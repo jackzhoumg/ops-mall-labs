@@ -1,0 +1,75 @@
+{
+  "receiver": "ai-analyzer",
+  "status": "firing",
+  "version": "4",
+  "groupKey": "{}/{severity=~\"critical|warning\"}:{alertname=\"MallApiHighErrorRate\", namespace=\"mall\", severity=\"warning\"}",
+  "truncatedAlerts": 0,
+  "groupLabels": {
+    "alertname": "MallApiHighErrorRate",
+    "namespace": "mall",
+    "severity": "warning"
+  },
+  "commonLabels": {
+    "alertname": "MallApiHighErrorRate",
+    "namespace": "mall",
+    "severity": "warning"
+  },
+  "commonAnnotations": {
+    "summary": "mall mall-api 5xx 错误率 3.2%"
+  },
+  "externalURL": "http://alertmanager.lab.local",
+  "alerts": [
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "MallApiHighErrorRate",
+        "namespace": "mall",
+        "job": "mall-api",
+        "severity": "warning",
+        "prometheus": "monitoring/kube-prometheus-stack-prometheus"
+      },
+      "annotations": {
+        "summary": "mall mall-api 5xx 错误率 3.2%",
+        "description": "最近 5 分钟 5xx 比例超过 1%，已持续 5 分钟。"
+      },
+      "startsAt": "2026-11-24T08:05:30.123Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus.lab.local/graph?g0.expr=namespace_job%3Amall_http_error_ratio%3Arate5m%20%3E%200.01%20and%20namespace_job%3Amall_http_requests%3Arate5m%20%3E%200.1&g0.tab=1",
+      "fingerprint": "a1b2c3d4e5f60001"
+    },
+    {
+      "status": "firing",
+      "labels": {
+        "alertname": "MallApiHighErrorRate",
+        "namespace": "mall",
+        "job": "mall-api",
+        "severity": "warning",
+        "prometheus": "monitoring/kube-prometheus-stack-prometheus-replica"
+      },
+      "annotations": {
+        "summary": "mall mall-api 5xx 错误率 3.1%",
+        "description": "最近 5 分钟 5xx 比例超过 1%，已持续 5 分钟。"
+      },
+      "startsAt": "2026-11-24T08:05:45Z",
+      "endsAt": "0001-01-01T00:00:00Z",
+      "generatorURL": "http://prometheus.lab.local/graph?g0.expr=namespace_job%3Amall_http_error_ratio%3Arate5m%20%3E%200.01%20and%20namespace_job%3Amall_http_requests%3Arate5m%20%3E%200.1&g0.tab=1",
+      "fingerprint": "a1b2c3d4e5f60002"
+    },
+    {
+      "status": "resolved",
+      "labels": {
+        "alertname": "MallPodRestartingFrequently",
+        "namespace": "mall",
+        "pod": "mall-api-7d9f8c6b5-x2k4q",
+        "severity": "warning"
+      },
+      "annotations": {
+        "summary": "mall/mall-api-7d9f8c6b5-x2k4q 15 分钟内重启 3 次"
+      },
+      "startsAt": "2026-11-24T07:40:00Z",
+      "endsAt": "2026-11-24T08:01:00Z",
+      "generatorURL": "",
+      "fingerprint": "ffee00112233"
+    }
+  ]
+}

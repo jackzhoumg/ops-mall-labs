@@ -1,0 +1,12 @@
+ops-mall 已部署到命名空间 {{ .Release.Namespace }}（环境：{{ .Values.environment }}）
+
+  mall-api 镜像：{{ .Values.api.image.repository }}:{{ .Values.api.image.tag }}
+  mall-web 镜像：{{ .Values.web.image.repository }}:{{ .Values.web.image.tag }}
+  工作负载类型：{{ if .Values.api.rollout.enabled }}Rollout（金丝雀，策略 {{ .Values.api.rollout.trafficRouting }}）{{ else }}Deployment{{ end }}
+
+检查：
+  kubectl -n {{ .Release.Namespace }} get pods,svc,httproute
+  kubectl -n {{ .Release.Namespace }} get secret {{ .Values.api.existingSecret }}   # 必须存在，否则 mall-api 起不来
+{{- range .Values.httpRoute.hostnames }}
+  curl -s http://{{ . }}/api/version
+{{- end }}

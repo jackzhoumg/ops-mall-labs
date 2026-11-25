@@ -1,0 +1,30 @@
+# Node-2：Prometheus 抓取质押节点的指标（Geth 6060、Lighthouse bn 5054、Lighthouse vc 5064）
+# 和 Node-1 跑在同一台 lab-eth1 时，Node-1 的 eth-geth / eth-lighthouse 抓取配置可以继续用，只需要新增 eth-validator。
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: eth-validator
+  namespace: monitoring
+spec:
+  jobName: eth-validator
+  scrapeInterval: 15s
+  staticConfigs:
+    - targets: ["192.168.56.31:5064"]
+      labels:
+        hostname: lab-eth1
+        network: hoodi
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: eth-staking-beacon
+  namespace: monitoring
+spec:
+  jobName: eth-lighthouse
+  scrapeInterval: 15s
+  staticConfigs:
+    - targets: ["192.168.56.31:5054"]
+      labels:
+        hostname: lab-eth1
+        network: hoodi
+        role: staking

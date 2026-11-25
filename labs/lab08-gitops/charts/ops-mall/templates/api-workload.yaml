@@ -1,0 +1,60 @@
+{{- $api := .Values.api -}}
+{{- $ctx := dict "root" . "name" $api.name -}}
+{{- if $api.rollout.enabled }}
+# 生产：Argo Rollouts 金丝雀发布，替代 Deployment
+apiVersion: argoproj.io/v1alpha1
+kind: Rollout
+metadata:
+  name: {{ $api.name }}
+  labels:
+    {{- include "ops-mall.labels" $ctx | nindent 4 }}
+spec:
+  {{- if not $api.hpa.enabled }}
+  replicas: {{ $api.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  progressDeadlineSeconds: {{ $api.rollout.progressDeadlineSeconds }}
+  progressDeadlineAbort: {{ $api.rollout.progressDeadlineAbort }}
+  selector:
+    matchLabels:
+      {{- include "ops-mall.selectorLabels" $ctx | nindent 6 }}
+  template:
+    {{- include "ops-mall.api.podTemplate" . | nindent 4 }}
+  strategy:
+    canary:
+      # Rollouts 会给这两个 Service 的 selector 加上 rollouts-pod-template-hash，
+      # 分别只指向新版本 / 稳定版本的 Pod
+      canaryService: {{ $api.name }}-canary
+      stableService: {{ $api.name }}-stable
+      {{- if eq $api.rollout.trafficRouting "gatewayapi" }}
+      trafficRouting:
+        plugins:
+          argoproj-labs/gatewayAPI:
+            httpRoute: {{ $api.name }}
+            namespace: {{ .Release.Namespace }}
+      {{- end }}
+      steps:
+        {{- toYaml $api.rollout.steps | nindent 8 }}
+{{- else }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $api.name }}
+  labels:
+    {{- include "ops-mall.labels" $ctx | nindent 4 }}
+spec:
+  {{- if not $api.hpa.enabled }}
+  replicas: {{ $api.replicas }}
+  {{- end }}
+  revisionHistoryLimit: 5
+  selector:
+    matchLabels:
+      {{- include "ops-mall.selectorLabels" $ctx | nindent 6 }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 0
+  template:
+    {{- include "ops-mall.api.podTemplate" . | nindent 4 }}
+{{- end }}

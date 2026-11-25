@@ -1,0 +1,64 @@
+# Lab 09：抓取 K8s 集群外的虚拟机 exporter
+# 为什么用 ScrapeConfig：虚拟机不在 K8s 里，没有 Service 可选，ServiceMonitor 用不了。
+# ScrapeConfig（monitoring.coreos.com/v1alpha1）可以直接写静态目标，改完 kubectl apply 就生效，
+# 不用像 additionalScrapeConfigs 那样改 Helm values 再 upgrade。
+# 前提：kube-prometheus-stack-values.yaml 里 scrapeConfigSelectorNilUsesHelmValues: false
+#
+# 网络：Prometheus Pod 访问 192.168.56.0/24 时，Calico 默认做 SNAT，
+# 虚拟机看到的源 IP 是 K8s 节点 IP（192.168.56.21-23），防火墙按网段放行即可。
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: vm-node
+  namespace: monitoring
+spec:
+  jobName: vm-node
+  scrapeInterval: 30s
+  staticConfigs:
+    - targets: ["192.168.56.11:9100"]
+      labels:
+        hostname: lab-web1
+        role: web
+    - targets: ["192.168.56.12:9100"]
+      labels:
+        hostname: lab-web2
+        role: web
+    - targets: ["192.168.56.13:9100"]
+      labels:
+        hostname: lab-db1
+        role: db
+    - targets: ["192.168.56.14:9100"]
+      labels:
+        hostname: lab-db2
+        role: db
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: vm-mysql
+  namespace: monitoring
+spec:
+  jobName: vm-mysql
+  scrapeInterval: 30s
+  staticConfigs:
+    - targets: ["192.168.56.13:9104"]
+      labels:
+        hostname: lab-db1
+        mysql_role: primary
+    - targets: ["192.168.56.14:9104"]
+      labels:
+        hostname: lab-db2
+        mysql_role: replica
+---
+apiVersion: monitoring.coreos.com/v1alpha1
+kind: ScrapeConfig
+metadata:
+  name: vm-redis
+  namespace: monitoring
+spec:
+  jobName: vm-redis
+  scrapeInterval: 30s
+  staticConfigs:
+    - targets: ["192.168.56.13:9121"]
+      labels:
+        hostname: lab-db1

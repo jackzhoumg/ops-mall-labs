@@ -1,0 +1,154 @@
+# ops-mall GitLab CI 流水线（Lab 07）
+# 用法：复制到仓库根目录，文件名保持 .gitlab-ci.yml
+#   cp labs/lab07-cicd/.gitlab-ci.yml .gitlab-ci.yml
+#
+# 流水线：test -> build -> scan -> push -> deploy
+#   - 合并请求（MR）：只跑 test，给评审人一个“能不能合”的信号
+#   - main 分支：全流程，最后 kubectl set image 发布到 mall 命名空间
+#   - v* 标签：全流程，镜像 tag 用版本号（如 v1.2.0）
+#
+# 需要在 项目 > 设置 > CI/CD > 变量 里配置（不要写进这个文件）：
+#   HARBOR_USER      Harbor 机器人账号名，如 robot$mall+ci   （Protected，取消勾选 Expand variable reference）
+#   HARBOR_PASSWORD  机器人账号密钥                          （Masked + Protected）
+#   KUBECONFIG_MALL  类型选 File，内容是 ci-deployer 的 kubeconfig（Protected）
+#
+# Runner 要求：Docker executor，job 容器挂载了宿主机 /var/run/docker.sock
+# （见 labs/lab07-cicd/gitlab-runner/register-runner.sh），并且宿主机 Docker 已信任 Harbor 证书。
+
+workflow:
+  rules:
+    # MR 流水线
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    # 分支已经有打开的 MR 时，不再重复跑分支流水线
+    - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS
+      when: never
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+variables:
+  # 镜像仓库，与课程约定一致：harbor.lab.local/mall/mall-api:<tag>
+  REGISTRY: harbor.lab.local
+  API_IMAGE: $REGISTRY/mall/mall-api
+  WEB_IMAGE: $REGISTRY/mall/mall-web
+  # 流水线用到的工具镜像。国内拉 Docker Hub 慢时，先同步到 Harbor 再改这里
+  GO_IMAGE: golang:1.26
+  DOCKER_IMAGE: docker:29-cli
+  TRIVY_IMAGE: aquasec/trivy:0.76.2
+  CI_TOOLS_IMAGE: harbor.lab.local/library/ci-tools:v1.0.0
+  # Go 依赖
+  GOPROXY: https://goproxy.cn,direct
+  GOMODCACHE: $CI_PROJECT_DIR/.cache/go-mod
+  GOCACHE: $CI_PROJECT_DIR/.cache/go-build
+  # 部署目标
+  K8S_NAMESPACE: mall
+
+stages:
+  - test
+  - build
+  - scan
+  - push
+  - deploy
+
+# 镜像 tag 规则：打了 v* 标签用标签名，否则用短提交号（GitLab 默认 8 位）
+.image-tag: &image-tag
+  - |
+    if [ -n "${CI_COMMIT_TAG:-}" ]; then
+      export IMAGE_TAG="$CI_COMMIT_TAG"
+    else
+      export IMAGE_TAG="$CI_COMMIT_SHORT_SHA"
+    fi
+    echo "IMAGE_TAG=$IMAGE_TAG"
+
+# 只在 main 分支和 v* 标签上跑的 job 复用这组规则
+.release-rules:
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+
+test:
+  stage: test
+  image: $GO_IMAGE
+  cache:
+    key:
+      files:
+        - app/go.sum
+    paths:
+      - .cache/
+  script:
+    - cd app
+    - go version
+    - go vet ./...
+    - go test -race -count=1 ./...
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+    - if: $CI_COMMIT_BRANCH
+    - if: $CI_COMMIT_TAG
+
+build:
+  stage: build
+  image: $DOCKER_IMAGE
+  extends: .release-rules
+  before_script:
+    - *image-tag
+  script:
+    # 构建上下文是仓库根目录，Dockerfile 由 Lab 04 提供
+    - docker build -f labs/lab04-docker/Dockerfile.api --build-arg VERSION="$IMAGE_TAG" -t "$API_IMAGE:$IMAGE_TAG" .
+    - docker build -f labs/lab04-docker/Dockerfile.web -t "$WEB_IMAGE:$IMAGE_TAG" .
+    - docker image ls --filter "reference=$REGISTRY/mall/*"
+
+scan:
+  stage: scan
+  image:
+    name: $TRIVY_IMAGE
+    entrypoint: [""]
+  extends: .release-rules
+  variables:
+    TRIVY_CACHE_DIR: $CI_PROJECT_DIR/.cache/trivy
+  cache:
+    key: trivy-db
+    paths:
+      - .cache/trivy/
+  before_script:
+    - *image-tag
+  script:
+    # 扫描本机 Docker 里刚构建的镜像（job 容器挂了 docker.sock）
+    # 有可修复的 HIGH/CRITICAL 漏洞就让流水线失败，镜像不会被推送
+    - trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --no-progress "$API_IMAGE:$IMAGE_TAG"
+    - trivy image --exit-code 1 --severity HIGH,CRITICAL --ignore-unfixed --no-progress "$WEB_IMAGE:$IMAGE_TAG"
+
+push:
+  stage: push
+  image: $DOCKER_IMAGE
+  extends: .release-rules
+  before_script:
+    - *image-tag
+    - echo "$HARBOR_PASSWORD" | docker login "$REGISTRY" -u "$HARBOR_USER" --password-stdin
+  script:
+    - docker push "$API_IMAGE:$IMAGE_TAG"
+    - docker push "$WEB_IMAGE:$IMAGE_TAG"
+  after_script:
+    - docker logout "$REGISTRY" || true
+
+deploy:
+  stage: deploy
+  image: $CI_TOOLS_IMAGE
+  extends: .release-rules
+  # 同一时间只允许一个发布，后来的排队，避免两次发布交叉
+  resource_group: k8s-mall
+  environment:
+    name: mall
+    url: http://mall.lab.local
+  before_script:
+    - *image-tag
+    # KUBECONFIG_MALL 是 File 类型变量，值是临时文件路径
+    - export KUBECONFIG="$KUBECONFIG_MALL"
+    - kubectl version
+  script:
+    # 容器名需与 Lab 06 的 Deployment 一致（mall-api / mall-web）
+    - kubectl -n "$K8S_NAMESPACE" set image deployment/mall-api mall-api="$API_IMAGE:$IMAGE_TAG"
+    - kubectl -n "$K8S_NAMESPACE" set image deployment/mall-web mall-web="$WEB_IMAGE:$IMAGE_TAG"
+    - kubectl -n "$K8S_NAMESPACE" annotate deployment/mall-api kubernetes.io/change-cause="gitlab pipeline $CI_PIPELINE_ID $IMAGE_TAG" --overwrite
+    # 等滚动更新完成；超时说明新 Pod 起不来，job 失败，人去看
+    - kubectl -n "$K8S_NAMESPACE" rollout status deployment/mall-api --timeout=180s
+    - kubectl -n "$K8S_NAMESPACE" rollout status deployment/mall-web --timeout=120s
+    - kubectl -n "$K8S_NAMESPACE" get pods -l app.kubernetes.io/part-of=ops-mall -o wide

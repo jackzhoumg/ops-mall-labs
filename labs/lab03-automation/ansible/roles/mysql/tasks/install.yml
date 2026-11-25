@@ -1,0 +1,22 @@
+- name: 添加 MySQL 8.4 官方仓库
+  ansible.builtin.yum_repository:
+    name: mysql84-community
+    description: MySQL 8.4 LTS Community Server
+    baseurl: "{{ mysql_repo_baseurl }}"
+    gpgcheck: true
+    gpgkey: "{{ mysql_repo_gpgkey }}"
+    enabled: true
+
+- name: 安装 MySQL 和 Ansible 连接 MySQL 用的 PyMySQL
+  ansible.builtin.dnf:
+    name:
+      - mysql-community-server
+      - python3-PyMySQL
+    state: present
+
+- name: 防火墙只对实验网段开放 3306
+  ansible.posix.firewalld:
+    rich_rule: 'rule family="ipv4" source address="{{ lab_network }}" port port="{{ mysql_port }}" protocol="tcp" accept'
+    permanent: true
+    immediate: true
+    state: enabled

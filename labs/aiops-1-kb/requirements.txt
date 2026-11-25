@@ -1,0 +1,4 @@
+# 写作时版本：openai 3.58.0（Python 3.10+）。只用到它的 OpenAI 兼容客户端，不绑定 OpenAI 这一家。
+openai>=1.40,<4
+# 只有跑单元测试需要
+pytest>=8

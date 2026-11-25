@@ -1,0 +1,42 @@
+# 思路一：按 CPU 利用率扩缩容（依赖 metrics-server）。
+# 用法（k8s-master）：kubectl apply -f k8s/hpa-cpu.yaml
+# 注意：和 k8s/keda-scaledobject.yaml 二选一，同一个 Deployment 不能同时被两个 HPA 管。
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: mall-api
+  namespace: mall
+  labels:
+    app.kubernetes.io/name: mall-api
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: mall-api
+  minReplicas: 2          # 至少 2 个，坏一个还有一个
+  maxReplicas: 6          # 上限按集群容量和数据库连接数算（6 × 20 = 120 < 151）
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 60   # 相对 requests 的 60%；留余量给扩容期间的流量
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 0     # 扩容不等待
+      selectPolicy: Max
+      policies:
+        - type: Percent
+          value: 100                    # 每 30 秒最多翻倍
+          periodSeconds: 30
+        - type: Pods
+          value: 2                      # 或者每 30 秒最多加 2 个，取两者大的
+          periodSeconds: 30
+    scaleDown:
+      stabilizationWindowSeconds: 300   # 缩容前观察 5 分钟，防止流量抖动导致反复扩缩
+      policies:
+        - type: Pods
+          value: 1                      # 每分钟最多减 1 个，慢慢缩
+          periodSeconds: 60

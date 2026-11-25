@@ -1,0 +1,36 @@
+# Chaos Mesh Helm values（写作时版本 Chaos Mesh 2.8.8，以官方文档为准）
+# 安装：
+#   helm repo add chaos-mesh https://charts.chaos-mesh.org
+#   helm install chaos-mesh chaos-mesh/chaos-mesh -n chaos-mesh --create-namespace \
+#     --version 2.8.8 -f install/values-chaos-mesh.yaml
+
+# 爆炸半径控制第一道闸：只允许在 mall 命名空间里选目标、建实验。
+# 别的命名空间（monitoring、kube-system、argocd……）就算误写了 selector 也打不到。
+clusterScoped: false
+
+controllerManager:
+  targetNamespace: mall
+  # 实验集群资源紧，控制器跑 1 个副本就够；生产保持默认 3 副本 + 选主
+  replicaCount: 1
+  leaderElection:
+    enabled: false
+
+# 本课程不做 DNSChaos，不装 DNS 服务，省一个 Pod
+dnsServer:
+  create: false
+  targetNamespace: mall
+
+# 课程集群的容器运行时是 containerd（Lab 05）
+chaosDaemon:
+  runtime: containerd
+  socketPath: /run/containerd/containerd.sock
+
+dashboard:
+  # 安全模式：登录 Dashboard 要填 ServiceAccount token。实验环境也保持开启
+  securityMode: true
+
+# 镜像默认从 cr.chaos-mesh.dev（ghcr.io 的代理）拉取。国内拉不下来时，
+# 先把 chaos-mesh/chaos-mesh、chaos-mesh/chaos-daemon、chaos-mesh/chaos-dashboard 三个镜像（tag v2.8.8）
+# 同步到 Harbor 的 chaos-mesh 项目，再打开下面两行：
+# images:
+#   registry: harbor.lab.local

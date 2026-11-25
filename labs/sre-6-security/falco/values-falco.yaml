@@ -1,0 +1,37 @@
+# Falco Helm values（写作时 Falco 0.45.2，Helm Chart falcosecurity/falco 9.2.2，以官方文档为准）
+# 安装：
+#   helm repo add falcosecurity https://falcosecurity.github.io/charts
+#   helm install falco falcosecurity/falco -n falco --create-namespace \
+#     --version 9.2.2 -f values-falco.yaml --set-file 'customRules.mall-rules\.yaml=mall-rules.yaml'
+#
+# falco 命名空间需要 privileged（DaemonSet 要加载 eBPF 探针、挂宿主机目录）。
+
+driver:
+  # modern_ebpf：探针编译进 Falco 本身，不用按内核版本下载 / 编译驱动，国内网络环境下最省事。
+  # 要求内核 >= 5.8 且开启 BTF。Rocky Linux 9（内核 5.14）满足。
+  kind: modern_ebpf
+
+# 告警输出成 JSON 单行，方便 Lab 10 的 Fluent Bit 收集到 Loki / Elasticsearch
+falco:
+  json_output: true
+  json_include_output_property: true
+  # 只输出 NOTICE 及以上级别，减少噪音
+  priority: notice
+
+# 打印告警时带上 Kubernetes 元数据（命名空间、Pod 名）
+collectors:
+  enabled: true
+
+# 实验集群资源少，限制一下
+resources:
+  requests:
+    cpu: 100m
+    memory: 256Mi
+  limits:
+    cpu: 1000m
+    memory: 1024Mi
+
+# 控制平面节点也要跑 Falco（攻击者拿下 master 比拿下 worker 更危险）。Chart 默认已带这条容忍，这里写出来是为了看得见
+tolerations:
+  - effect: NoSchedule
+    key: node-role.kubernetes.io/control-plane

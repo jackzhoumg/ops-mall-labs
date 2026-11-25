@@ -1,0 +1,54 @@
+# 演练和值班用的告警规则（复盘改进项 AI-2、AI-3 的落地，也用于模拟演练里的“发现”环节）。
+# 前提：Lab 09 用 kube-prometheus-stack 安装，Prometheus 会加载带 release 标签的 PrometheusRule。
+# 查你的 release 标签值：kubectl -n monitoring get prometheus -o jsonpath='{.items[0].spec.ruleSelector}'
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mall-api-incident
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  groups:
+    - name: mall-api-incident
+      rules:
+        # 就绪 Pod 比例低于 50%：服务能力腰斩，按 P1 处理
+        - alert: MallApiNoReadyPods
+          expr: |
+            kube_deployment_status_replicas_available{namespace="mall", deployment="mall-api"}
+              / kube_deployment_spec_replicas{namespace="mall", deployment="mall-api"} < 0.5
+          for: 1m
+          labels:
+            severity: critical
+            level: P1
+          annotations:
+            summary: "mall-api 可用副本不足一半"
+            description: "mall-api 可用副本比例 {{ $value | humanizePercentage }}，网关可能已经返回 503。先看 kubectl -n mall get pods 和 /readyz。"
+
+        # 5xx 比例超过 5%
+        - alert: MallApiHighErrorRate
+          expr: |
+            sum(rate(mall_http_requests_total{status=~"5.."}[5m]))
+              / sum(rate(mall_http_requests_total[5m])) > 0.05
+          for: 2m
+          labels:
+            severity: critical
+            level: P2
+          annotations:
+            summary: "mall-api 5xx 比例超过 5%"
+            description: "当前 5xx 比例 {{ $value | humanizePercentage }}"
+
+        # P95 延迟超过 1 秒
+        - alert: MallApiHighLatency
+          expr: |
+            histogram_quantile(0.95,
+              sum by (le) (rate(mall_http_request_duration_seconds_bucket{route!~".*debug.*"}[5m]))
+            ) > 1
+          for: 5m
+          labels:
+            severity: warning
+            level: P2
+          annotations:
+            summary: "mall-api P95 延迟超过 1 秒"
+            description: "当前 P95 {{ $value | humanizeDuration }}"

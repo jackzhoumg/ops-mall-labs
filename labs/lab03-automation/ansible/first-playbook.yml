@@ -1,0 +1,40 @@
+# 第一个 Playbook：练手用，理解 play / task / module / handler / 幂等
+#   ansible-playbook first-playbook.yml
+#   再执行一次，看 changed 是不是变成 0
+- name: 第一个 Playbook
+  hosts: mall
+  become: true
+  vars:
+    motd_text: "ops-mall 实验机器，由 Ansible 管理。手工改动会被覆盖。"
+  tasks:
+    - name: 安装 chrony
+      ansible.builtin.dnf:
+        name: chrony
+        state: present
+
+    - name: 写登录提示
+      ansible.builtin.copy:
+        dest: /etc/motd
+        content: |
+          {{ motd_text }}
+          主机：{{ inventory_hostname }}（{{ ansible_host }}）
+        mode: "0644"
+
+    - name: 配置 chrony 使用国内 NTP
+      ansible.builtin.lineinfile:
+        path: /etc/chrony.conf
+        regexp: '^pool '
+        line: "pool ntp.aliyun.com iburst"
+      notify: restart chronyd
+
+    - name: chronyd 开机启动
+      ansible.builtin.systemd_service:
+        name: chronyd
+        state: started
+        enabled: true
+
+  handlers:
+    - name: restart chronyd
+      ansible.builtin.systemd_service:
+        name: chronyd
+        state: restarted

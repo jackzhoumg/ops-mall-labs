@@ -1,0 +1,26 @@
+# mall 命名空间里 mysql Service（无选择器）的后端地址：切回 lab-db1（主库恢复、回切之后）。
+#
+# 重要：metadata.name 必须和 Lab 06 创建的那个 EndpointSlice 同名，apply 才是“修改地址”。
+# 名字不一样会变成新增一个 EndpointSlice，新旧两个地址同时生效，一半连接打到旧主库（脑裂写入）。
+# 先查名字：kubectl -n mall get endpointslice -l kubernetes.io/service-name=mysql
+#
+# 用法（k8s-master）：kubectl apply -f k8s/mysql-endpointslice-db1.yaml
+apiVersion: discovery.k8s.io/v1
+kind: EndpointSlice
+metadata:
+  name: mysql-external
+  namespace: mall
+  labels:
+    kubernetes.io/service-name: mysql            # 关联到 Service mysql
+    endpointslice.kubernetes.io/managed-by: ops-team   # 手工维护，不是控制器生成的
+    app.kubernetes.io/part-of: ops-mall
+addressType: IPv4
+ports:
+  - name: mysql            # 和 Service 里的端口名一致（Service 端口没名字就写 ""）
+    protocol: TCP
+    port: 3306
+endpoints:
+  - addresses:
+      - "192.168.56.13"
+    conditions:
+      ready: true

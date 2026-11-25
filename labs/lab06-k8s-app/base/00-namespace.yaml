@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+    # Pod 安全标准 baseline：禁止特权容器、hostPath 等高危配置；官方 nginx 镜像以 root 启动，过不了 restricted
+    pod-security.kubernetes.io/enforce: baseline

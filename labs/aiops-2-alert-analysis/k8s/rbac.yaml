@@ -1,0 +1,42 @@
+# AIOps-2：alert-analyzer 的 ServiceAccount 和只读权限
+# 最小权限：只能读 mall 命名空间的 Pod 和事件，不能看 Secret、不能改任何东西。
+# 用 Role + RoleBinding（命名空间级），不用 ClusterRole：分析服务被攻破也只能看到这两类资源。
+# 要分析 mall-staging / mall-prod 的告警，把下面的 Role 和 RoleBinding 复制一份改 namespace。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: alert-analyzer
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: alert-analyzer
+    app.kubernetes.io/part-of: ops-mall
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: alert-analyzer-read
+  namespace: mall
+  labels:
+    app.kubernetes.io/name: alert-analyzer
+    app.kubernetes.io/part-of: ops-mall
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "events"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: alert-analyzer-read
+  namespace: mall
+  labels:
+    app.kubernetes.io/name: alert-analyzer
+    app.kubernetes.io/part-of: ops-mall
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: alert-analyzer-read
+subjects:
+  - kind: ServiceAccount
+    name: alert-analyzer
+    namespace: monitoring

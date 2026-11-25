@@ -1,0 +1,29 @@
+# Lab 10（选做）：Kibana，连接同命名空间的 mall-logs 集群
+apiVersion: kibana.k8s.elastic.co/v1
+kind: Kibana
+metadata:
+  name: mall-kibana
+  namespace: logging
+spec:
+  version: 9.5.7
+  count: 1
+  elasticsearchRef:
+    name: mall-logs
+  http:
+    tls:
+      selfSignedCertificate:
+        # 由 Envoy Gateway 对外提供访问，Kibana 自己不再做 TLS
+        disabled: true
+  config:
+    server.publicBaseUrl: http://kibana.lab.local
+    i18n.locale: zh-CN
+  podTemplate:
+    spec:
+      containers:
+        - name: kibana
+          resources:
+            requests:
+              cpu: 200m
+              memory: 1Gi
+            limits:
+              memory: 1Gi

@@ -1,0 +1,167 @@
+# Lab 09：mall-api 的记录规则和告警规则
+# 指标来自 app/metrics.go：
+#   mall_http_requests_total{method,route,status}
+#   mall_http_request_duration_seconds_bucket{method,route,le}
+#   mall_orders_created_total / mall_cache_hits_total / mall_cache_misses_total / mall_build_info{version}
+# route 标签是 "方法 + 路由模板"，例如 "GET /api/products/{id}"、"GET /healthz"。
+#
+# 级别约定：severity=critical 即 P1（马上处理，电话 / 值班群）；
+#           severity=warning  即 P2（工作时间处理）；severity=info 即 P3（看趋势，不打扰人）。
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: mall-api
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  groups:
+    # ---------- 记录规则：把常用的复杂表达式提前算好，大盘和告警直接用，查询更快、写法统一 ----------
+    - name: mall-api.recording
+      interval: 30s
+      rules:
+        # 业务 QPS：排除探针和抓取请求（kubelet 每 10 秒探一次，Prometheus 每 15 秒抓一次，会拉低错误率）
+        - record: namespace_job:mall_http_requests:rate5m
+          expr: |
+            sum by (namespace, job) (
+              rate(mall_http_requests_total{job="mall-api", route!~"GET /(healthz|readyz|metrics)"}[5m])
+            )
+        - record: namespace_job:mall_http_errors:rate5m
+          expr: |
+            sum by (namespace, job) (
+              rate(mall_http_requests_total{job="mall-api", route!~"GET /(healthz|readyz|metrics)", status=~"5.."}[5m])
+            )
+        - record: namespace_job:mall_http_error_ratio:rate5m
+          expr: |
+            namespace_job:mall_http_errors:rate5m
+              /
+            namespace_job:mall_http_requests:rate5m
+        - record: namespace_job:mall_http_request_duration_seconds:p95_5m
+          expr: |
+            histogram_quantile(0.95,
+              sum by (namespace, job, le) (
+                rate(mall_http_request_duration_seconds_bucket{job="mall-api", route!~"GET /(healthz|readyz|metrics)"}[5m])
+              )
+            )
+        - record: namespace_job:mall_http_request_duration_seconds:p99_5m
+          expr: |
+            histogram_quantile(0.99,
+              sum by (namespace, job, le) (
+                rate(mall_http_request_duration_seconds_bucket{job="mall-api", route!~"GET /(healthz|readyz|metrics)"}[5m])
+              )
+            )
+
+    # ---------- 告警规则 ----------
+    - name: mall-api.alerts
+      rules:
+        # 所有抓取目标都消失（Deployment 被删、副本数为 0、Service 标签对不上）。
+        # up == 0 只能发现"目标在但抓不到"，目标整个没了要用 absent()。
+        - alert: MallApiDown
+          expr: absent(up{job="mall-api", namespace="mall"} == 1)
+          for: 2m
+          labels:
+            severity: critical
+            # absent() 包了比较表达式，结果不带任何标签；手工补上 namespace，抑制规则才能按命名空间匹配
+            namespace: mall
+          annotations:
+            summary: "mall-api 在 mall 命名空间没有任何健康实例"
+            description: "连续 2 分钟没有一个 mall-api 实例能被抓到指标，商城接口基本不可用。先看 kubectl -n mall get pod,svc,endpointslice。"
+
+        - alert: MallApiInstanceDown
+          expr: up{job="mall-api"} == 0
+          for: 2m
+          labels:
+            severity: warning
+          annotations:
+            summary: "mall-api 实例 {{ $labels.pod }} 抓取失败"
+            description: "{{ $labels.namespace }}/{{ $labels.pod }} 连续 2 分钟 /metrics 抓取失败，可能进程卡死或网络不通。"
+
+        # 错误率两档阈值，同一个告警名，靠 severity 区分；Alertmanager 里 critical 会抑制 warning。
+        # "and 请求量 > 0.1/s" 是为了半夜没流量时，1 个请求失败就算出 100% 错误率误报。
+        - alert: MallApiHighErrorRate
+          expr: |
+            namespace_job:mall_http_error_ratio:rate5m > 0.05
+              and
+            namespace_job:mall_http_requests:rate5m > 0.1
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} mall-api 5xx 错误率 {{ $value | humanizePercentage }}"
+            description: "最近 5 分钟 5xx 比例超过 5%，已持续 2 分钟。先看最近有没有发布，再看 MySQL / Redis。"
+        - alert: MallApiHighErrorRate
+          expr: |
+            namespace_job:mall_http_error_ratio:rate5m > 0.01
+              and
+            namespace_job:mall_http_requests:rate5m > 0.1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} mall-api 5xx 错误率 {{ $value | humanizePercentage }}"
+            description: "最近 5 分钟 5xx 比例超过 1%，已持续 5 分钟。"
+
+        - alert: MallApiHighLatency
+          expr: |
+            namespace_job:mall_http_request_duration_seconds:p99_5m > 2
+              and
+            namespace_job:mall_http_requests:rate5m > 0.1
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }} mall-api P99 延迟 {{ $value | humanizeDuration }}"
+            description: "P99 超过 2 秒已持续 3 分钟，用户明显感觉卡顿。看 Grafana 大盘按路由拆分的延迟，找出慢接口。"
+        - alert: MallApiHighLatency
+          expr: |
+            namespace_job:mall_http_request_duration_seconds:p95_5m > 0.5
+              and
+            namespace_job:mall_http_requests:rate5m > 0.1
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }} mall-api P95 延迟 {{ $value | humanizeDuration }}"
+            description: "P95 超过 500ms 已持续 5 分钟。"
+
+        # Pod 频繁重启：15 分钟内重启 3 次以上。只看重启次数会漏掉"一直 CrashLoop 但重启间隔越来越长"，所以下面还有一条。
+        - alert: MallPodRestartingFrequently
+          expr: |
+            sum by (namespace, pod) (
+              increase(kube_pod_container_status_restarts_total{namespace=~"mall|mall-staging|mall-prod"}[15m])
+            ) >= 3
+          for: 1m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 15 分钟内重启 {{ $value | printf \"%.0f\" }} 次"
+            description: "用 kubectl describe pod 看 Last State 的退出原因（OOMKilled / Error），再看 kubectl logs --previous。"
+
+        - alert: MallPodCrashLooping
+          expr: |
+            max by (namespace, pod, container) (
+              kube_pod_container_status_waiting_reason{namespace=~"mall|mall-staging|mall-prod", reason="CrashLoopBackOff"}
+            ) == 1
+          for: 5m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 处于 CrashLoopBackOff"
+            description: "容器 {{ $labels.container }} 反复启动失败超过 5 分钟。"
+
+        # 内存泄漏演练（/api/debug/leak）会触发这一条：容器超过内存 limit 被内核杀掉
+        - alert: MallPodOOMKilled
+          expr: |
+            (
+              increase(kube_pod_container_status_restarts_total{namespace=~"mall|mall-staging|mall-prod"}[10m]) > 0
+            )
+            and on (namespace, pod, container)
+            (
+              kube_pod_container_status_last_terminated_reason{namespace=~"mall|mall-staging|mall-prod", reason="OOMKilled"} == 1
+            )
+          for: 0m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.namespace }}/{{ $labels.pod }} 因内存超限被杀（OOMKilled）"
+            description: "容器 {{ $labels.container }} 最近一次退出原因是 OOMKilled。看内存曲线是持续上涨（泄漏）还是瞬间冲高（limit 太小）。"

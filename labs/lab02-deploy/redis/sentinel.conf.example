@@ -1,0 +1,17 @@
+# Redis 哨兵（可选练习）：/etc/redis/sentinel.conf 关键项
+# 本实验只有一台 Redis，哨兵练习需要再开两台机器（或者在 lab-db2 上起从库 + 3 个哨兵进程），见教程 5.10 节
+# 生产上的最小部署：1 主 2 从 + 3 个哨兵，哨兵分散在 3 台机器上
+#
+# 从库的 redis.conf 额外加两行：
+#   replicaof 192.168.56.13 6379
+#   masterauth ChangeMe-Redis-123
+
+port 26379
+# 主节点名字叫 mymaster，地址 192.168.56.13:6379，2 个哨兵都认为它挂了才算真挂（quorum）
+sentinel monitor mymaster 192.168.56.13 6379 2
+sentinel auth-pass mymaster ChangeMe-Redis-123
+# 30 秒连不上就标记主观下线
+sentinel down-after-milliseconds mymaster 30000
+# 切换后同时只让 1 个从库去同步新主，避免全部从库同时全量同步
+sentinel parallel-syncs mymaster 1
+sentinel failover-timeout mymaster 180000

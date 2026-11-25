@@ -1,0 +1,16 @@
+# 模拟演练用：把就绪探针改成“很敏感”的写法（这是很多团队的默认写法）。
+# 模拟演练开始前由主持人打上这个补丁。止损用 mall-api-probe-mitigate.yaml，长期方案用 mall-api-probe-patch.yaml。
+# 用法：kubectl -n mall patch deployment mall-api --patch-file k8s/mall-api-probe-fragile.yaml
+spec:
+  template:
+    spec:
+      containers:
+        - name: mall-api
+          readinessProbe:
+            httpGet:
+              path: /readyz
+              port: 8080
+            periodSeconds: 5
+            timeoutSeconds: 1
+            failureThreshold: 1
+            successThreshold: 1

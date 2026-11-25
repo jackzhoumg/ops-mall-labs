@@ -1,0 +1,18 @@
+# GitLab Runner（Docker executor），在 lab-ci（192.168.56.16）上运行
+#   sudo mkdir -p /srv/gitlab-runner/config && cd labs/lab07-cicd/gitlab-runner && sudo docker compose up -d
+# 写作时版本：v19.6.0，Runner 主版本号建议与 GitLab 保持一致
+services:
+  gitlab-runner:
+    image: gitlab/gitlab-runner:v19.6.0
+    container_name: gitlab-runner
+    restart: always
+    environment:
+      TZ: Asia/Shanghai
+    # Runner 进程自己要能解析 gitlab.lab.local
+    extra_hosts:
+      - "gitlab.lab.local:192.168.56.16"
+      - "harbor.lab.local:192.168.56.15"
+    volumes:
+      - /srv/gitlab-runner/config:/etc/gitlab-runner
+      # Runner 通过宿主机 Docker 创建 job 容器
+      - /var/run/docker.sock:/var/run/docker.sock

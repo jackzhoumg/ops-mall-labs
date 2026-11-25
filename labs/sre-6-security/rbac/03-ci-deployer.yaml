@@ -1,0 +1,50 @@
+# CI 部署账号（Jenkins / GitLab Runner 用）：只能在 mall 命名空间更新 Deployment 的镜像、查看发布状态。
+# 不能创建 / 删除 Deployment，不能读 Secret，不能 exec，不能碰别的命名空间。
+# 令牌用短期 token：kubectl -n mall create token ci-deployer --duration=1h
+# 用了 ArgoCD（Lab 08）之后，CI 根本不需要集群权限，只改 Git；这个账号只给还在用 kubectl 发布的流水线。
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ci-deployer
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+# 这个 SA 不给 Pod 用，不需要自动挂载
+automountServiceAccountToken: false
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ci-deployer
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+rules:
+  # kubectl set image / rollout status 需要 get + patch deployments，watch 用来等待发布完成
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    resourceNames: ["mall-api", "mall-web"]
+    verbs: ["get", "patch", "update", "watch"]
+  # rollout status 需要 list / watch，list 不能用 resourceNames 限制
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ci-deployer
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: ci-deployer
+subjects:
+  - kind: ServiceAccount
+    name: ci-deployer
+    namespace: mall

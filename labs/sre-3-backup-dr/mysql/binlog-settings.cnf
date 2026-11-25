@@ -1,0 +1,19 @@
+# 做时间点恢复（PITR）对 MySQL 的要求。Lab 02 配主从复制时大多已经配好，核对一遍。
+# 放到 lab-db1 和 lab-db2 的 /etc/my.cnf.d/（Rocky）或 /etc/mysql/mysql.conf.d/（Ubuntu），
+# server_id 两台不能一样，改完重启 mysqld。
+#
+# 核对命令：
+#   mysql -e "SELECT @@log_bin, @@binlog_format, @@gtid_mode, @@enforce_gtid_consistency, @@sync_binlog, @@innodb_flush_log_at_trx_commit, @@binlog_expire_logs_seconds\G"
+[mysqld]
+# MySQL 8.x 默认就开启 binlog，文件名 binlog.000001，放在数据目录
+log_bin = binlog
+# 行格式：记录每一行改成了什么，恢复最可靠
+binlog_format = ROW
+# GTID：每个事务有全局唯一编号，恢复时能精确跳过某个事务，主从切换也不用找位点
+gtid_mode = ON
+enforce_gtid_consistency = ON
+# 每次提交都把 binlog 和 redo log 刷盘，断电不丢已提交的事务（“双 1”）
+sync_binlog = 1
+innodb_flush_log_at_trx_commit = 1
+# 本地 binlog 保留 7 天，至少覆盖两个全备周期；更早的从 MinIO 取
+binlog_expire_logs_seconds = 604800

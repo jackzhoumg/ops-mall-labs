@@ -1,0 +1,26 @@
+# {{ ansible_managed }}
+[Unit]
+Description=ops-mall API server
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ mall_api_user }}
+Group={{ mall_api_user }}
+EnvironmentFile={{ mall_api_conf_dir }}/mall-api.env
+ExecStart={{ mall_api_install_dir }}/mall-api
+Restart=on-failure
+RestartSec=3
+# 和 MALL_SHUTDOWN_GRACE（默认 10s）配合：systemctl stop 先发 SIGTERM，超过 15s 才强杀
+TimeoutStopSec=15
+LimitNOFILE=65535
+
+# 基础加固：不能提权、/usr /boot /etc 只读、看不到 /home
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

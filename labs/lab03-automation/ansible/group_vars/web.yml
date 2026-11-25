@@ -1,0 +1,7 @@
+# web 组：Nginx + mall-api + Keepalived
+inspect_services: "sshd chronyd nginx mall-api keepalived"
+inspect_cert_files: "/etc/nginx/ssl/{{ mall_domain }}.crt"
+
+# Keepalived 绑定 VIP 的网卡：VirtualBox 第二块网卡（Host-Only）通常是 enp0s8，
+# VMware / UTM / 云服务器不一样，用 ip -br addr 查看后修改
+keepalived_interface: enp0s8

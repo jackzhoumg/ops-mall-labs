@@ -1,0 +1,44 @@
+# Terraform 建好机器之后，由 Ansible 接手做系统配置。
+# 用法（在 alicloud/envs/dev 目录下执行，inventory.ini 由 Terraform 生成）：
+#   ansible-playbook -i inventory.ini ../../../ansible/bootstrap.yml
+# 本地练习版：
+#   ansible-playbook -i inventory-default.ini ../ansible/bootstrap.yml
+- name: 新机器初始化（Terraform 只管“有没有机器”，机器里面的事归 Ansible）
+  hosts: all
+  become: true
+  gather_facts: false
+  tasks:
+    - name: 等 SSH 可用（新建的云服务器要几十秒才能登录）
+      ansible.builtin.wait_for_connection:
+        timeout: 300
+
+    - name: 收集系统信息
+      ansible.builtin.setup:
+
+    - name: 主机名与 inventory 一致
+      ansible.builtin.hostname:
+        name: "{{ inventory_hostname }}"
+
+    - name: 把所有机器的内网 IP 写进 /etc/hosts
+      ansible.builtin.blockinfile:
+        path: /etc/hosts
+        marker: "# {mark} ops-mall terraform hosts"
+        block: |
+          {% for h in groups['all'] %}
+          {{ hostvars[h].private_ip | default(hostvars[h].ansible_host) }} {{ h }}
+          {% endfor %}
+
+    - name: 安装常用工具
+      ansible.builtin.dnf:
+        name: [chrony, vim, curl, tar, bash-completion]
+        state: present
+
+    - name: 时间同步
+      ansible.builtin.service:
+        name: chronyd
+        state: started
+        enabled: true
+
+    - name: 时区
+      community.general.timezone:
+        name: Asia/Shanghai

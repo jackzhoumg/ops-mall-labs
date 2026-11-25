@@ -1,0 +1,42 @@
+# Node-1：不用 Docker 时，用 systemd 管理 Geth（二进制方式）
+# 安装：
+#   sudo useradd --system --no-create-home --shell /usr/sbin/nologin eth
+#   下载 https://geth.ethereum.org/downloads/ 的 geth-linux-amd64-1.17.10-*.tar.gz，解压后 sudo install -m 0755 geth /usr/local/bin/
+#   sudo mkdir -p /data/eth/geth && sudo chown -R eth:eth /data/eth
+#   sudo cp geth.service /etc/systemd/system/ && sudo systemctl daemon-reload && sudo systemctl enable --now geth
+# JWT 文件权限：sudo chown root:eth /data/eth/jwt/jwt.hex && sudo chmod 640 /data/eth/jwt/jwt.hex
+[Unit]
+Description=Geth execution client (Node-1)
+Documentation=https://geth.ethereum.org/docs
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+User=eth
+Group=eth
+Type=simple
+ExecStart=/usr/local/bin/geth \
+  --hoodi \
+  --datadir /data/eth/geth \
+  --syncmode snap \
+  --cache 4096 \
+  --http --http.addr 127.0.0.1 --http.port 8545 --http.api eth,net,web3 \
+  --history.transactions 0 \
+  --authrpc.addr 127.0.0.1 --authrpc.port 8551 --authrpc.jwtsecret /data/eth/jwt/jwt.hex \
+  --metrics --metrics.addr 192.168.56.31 --metrics.port 6060 \
+  --port 30303 --maxpeers 50 \
+  --datadir.minfreedisk 20480
+# Geth 收到 SIGINT 会把内存里的状态刷盘后退出，给足 5 分钟；被 SIGKILL 强杀可能导致数据库要长时间修复
+KillSignal=SIGINT
+TimeoutStopSec=300
+Restart=on-failure
+RestartSec=10
+LimitNOFILE=1048576
+# 加固
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

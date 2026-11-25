@@ -1,0 +1,12 @@
+# /etc/containerd/certs.d/harbor.lab.local/hosts.toml
+# 前提：/etc/containerd/config.toml 里
+#   [plugins.'io.containerd.cri.v1.images'.registry]
+#     config_path = '/etc/containerd/certs.d'
+# 目录名必须和镜像地址里的仓库主机名完全一致（带端口就写 harbor.lab.local:8443）
+server = "https://harbor.lab.local"
+
+[host."https://harbor.lab.local"]
+  capabilities = ["pull", "resolve", "push"]
+  # Lab 04 用 gen-certs.sh 生成的实验 CA，从 lab-dev 的 /data/cert/ca.crt 拷过来
+  ca = "/etc/containerd/certs.d/harbor.lab.local/ca.crt"
+  # 不要图省事写 skip_verify = true，那等于关掉 TLS 校验

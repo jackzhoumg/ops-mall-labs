@@ -1,0 +1,50 @@
+# ops-mall 自定义 Falco 规则。安装时用 --set-file 加载（见 values-falco.yaml 顶部的命令），
+# 会被挂载到 /etc/falco/rules.d/mall-rules.yaml，在官方规则之后加载。
+# 用到的宏和列表（spawned_process、container、shell_binaries 等）来自官方 falco_rules.yaml。
+
+# 规则 1：mall 命名空间的容器里启动了 shell。
+# 官方的 "Terminal shell in container" 只管带终端（-it）的情况；攻击者常用 kubectl exec ... -- sh -c '命令'，
+# 没有终端，那条规则抓不到。mall 的容器正常运行时从来不会起 shell，所以这里不要求终端，级别也更高。
+- rule: Shell spawned in mall container
+  desc: mall 命名空间的容器里启动了 shell（有没有终端都算）
+  condition: >
+    spawned_process
+    and container
+    and k8s.ns.name = "mall"
+    and proc.name in (shell_binaries)
+  output: >
+    mall 容器里启动了 shell
+    (ns=%k8s.ns.name pod=%k8s.pod.name container=%container.name image=%container.image.repository
+    user=%user.name uid=%user.uid cmdline=%proc.cmdline parent=%proc.pname terminal=%proc.tty)
+  priority: WARNING
+  tags: [ops_mall, container, shell, mitre_execution]
+
+# 规则 2：mall-api 容器里出现了 mall-api 以外的进程。
+# mall-api 是单个 Go 二进制，正常情况下容器里只有它自己。出现别的进程，大概率是被入侵或有人在调试。
+- rule: Unexpected process in mall-api
+  desc: mall-api 容器里启动了 mall-api 以外的程序
+  condition: >
+    spawned_process
+    and container
+    and k8s.ns.name = "mall"
+    and container.name = "mall-api"
+    and not proc.name = "mall-api"
+  output: >
+    mall-api 容器里出现了异常进程
+    (pod=%k8s.pod.name process=%proc.name cmdline=%proc.cmdline parent=%proc.pname user=%user.name image=%container.image.repository)
+  priority: CRITICAL
+  tags: [ops_mall, container, process]
+
+# 规则 3：mall 命名空间的容器里运行包管理器（装工具是入侵后的常见动作）。
+- rule: Package manager in mall container
+  desc: mall 命名空间的容器里运行了包管理器
+  condition: >
+    spawned_process
+    and container
+    and k8s.ns.name = "mall"
+    and proc.name in (package_mgmt_binaries)
+  output: >
+    mall 容器里运行了包管理器
+    (pod=%k8s.pod.name container=%container.name cmdline=%proc.cmdline user=%user.name)
+  priority: ERROR
+  tags: [ops_mall, container, mitre_persistence]

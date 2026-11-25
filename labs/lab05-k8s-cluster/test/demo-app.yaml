@@ -1,0 +1,80 @@
+# Lab 05 验证用：从 Harbor 拉 mall-api 镜像跑 3 个副本，验证跨节点网络、Harbor 证书、drain 时的 PDB
+# 这里不连数据库，只看 /healthz 和 /api/version；正式部署在 Lab 06
+# 用法：
+#   kubectl create namespace lab05
+#   kubectl -n lab05 create secret docker-registry harbor-pull \
+#     --docker-server=harbor.lab.local --docker-username=<用户> --docker-password=<密码>
+#   kubectl apply -f test/demo-app.yaml
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: mall-api
+  namespace: lab05
+  labels:
+    app.kubernetes.io/name: mall-api
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mall-api
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: mall-api
+        app.kubernetes.io/part-of: ops-mall
+    spec:
+      imagePullSecrets:
+        - name: harbor-pull
+      # 尽量把副本分散到不同节点，方便观察 drain 的效果
+      topologySpreadConstraints:
+        - maxSkew: 1
+          topologyKey: kubernetes.io/hostname
+          whenUnsatisfiable: ScheduleAnyway
+          labelSelector:
+            matchLabels:
+              app.kubernetes.io/name: mall-api
+      containers:
+        - name: mall-api
+          image: harbor.lab.local/mall/mall-api:v1.0.0
+          ports:
+            - name: http
+              containerPort: 8080
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: http
+          resources:
+            requests:
+              cpu: 50m
+              memory: 32Mi
+            limits:
+              memory: 128Mi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: mall-api
+  namespace: lab05
+spec:
+  # drain 时至少保留 2 个副本在跑，驱逐会排队等新副本起来
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: mall-api
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: mall-api
+  namespace: lab05
+  labels:
+    app.kubernetes.io/name: mall-api
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  selector:
+    app.kubernetes.io/name: mall-api
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http

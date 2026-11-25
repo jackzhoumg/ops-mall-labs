@@ -1,0 +1,131 @@
+# OpenTelemetry Collector（gateway 模式，单独一个 Deployment）。
+# 网关 Envoy 和 mall-api 都把链路发到这里，Collector 统一处理后转给 Jaeger。
+# 以后想换成 Tempo 或云厂商 APM，只改 exporters，应用和网关都不用动。
+# 写作时版本：opentelemetry-collector-contrib 0.165.0，以 https://opentelemetry.io/docs/collector/ 为准。
+#
+# 用法（k8s-master）：kubectl apply -f tracing/otel-collector.yaml
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: otel-collector
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: ops-mall
+data:
+  config.yaml: |
+    receivers:
+      otlp:
+        protocols:
+          grpc:
+            endpoint: 0.0.0.0:4317   # Collector 默认只监听 localhost，Pod 里必须写 0.0.0.0
+          http:
+            endpoint: 0.0.0.0:4318
+
+    processors:
+      # 内存保护：链路突增时先丢数据，不让 Collector 自己 OOM
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 80
+        spike_limit_percentage: 25
+      # 给所有 span 打上集群名，多集群汇总到一个后端时能区分
+      resource:
+        attributes:
+          - key: k8s.cluster.name
+            value: lab-k8s
+            action: upsert
+
+    exporters:
+      otlp_grpc/jaeger:
+        endpoint: jaeger.monitoring.svc:4317
+        tls:
+          insecure: true          # 集群内明文，生产环境建议开 TLS
+        sending_queue:
+          batch: {}               # 攒批发送，减少请求数
+      debug:
+        verbosity: basic          # 排障用：kubectl logs 能看到“收到多少 span”
+
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+
+    service:
+      extensions: [health_check]
+      pipelines:
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, resource]
+          exporters: [otlp_grpc/jaeger, debug]
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: otel-collector
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: otel-collector
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: otel-collector
+        app.kubernetes.io/part-of: ops-mall
+    spec:
+      containers:
+        - name: otel-collector
+          # 也可以用 ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.165.0
+          image: otel/opentelemetry-collector-contrib:0.165.0
+          args: ["--config=/conf/config.yaml"]
+          ports:
+            - name: otlp-grpc
+              containerPort: 4317
+            - name: otlp-http
+              containerPort: 4318
+            - name: health
+              containerPort: 13133
+          readinessProbe:
+            httpGet:
+              path: /
+              port: health
+          livenessProbe:
+            httpGet:
+              path: /
+              port: health
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              memory: 512Mi
+          volumeMounts:
+            - name: config
+              mountPath: /conf
+      volumes:
+        - name: config
+          configMap:
+            name: otel-collector
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: otel-collector
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: otel-collector
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  selector:
+    app.kubernetes.io/name: otel-collector
+  ports:
+    - name: otlp-grpc
+      port: 4317
+      targetPort: otlp-grpc
+      appProtocol: grpc     # 告诉 Envoy 这是 gRPC，否则可能按 HTTP/1.1 发导致失败
+    - name: otlp-http
+      port: 4318
+      targetPort: otlp-http

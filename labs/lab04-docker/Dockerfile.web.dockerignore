@@ -1,0 +1,4 @@
+# Dockerfile.web 专用的 ignore 文件，规则同 Dockerfile.api.dockerignore
+*
+!web/index.html
+!labs/lab04-docker/nginx/mall.conf.template

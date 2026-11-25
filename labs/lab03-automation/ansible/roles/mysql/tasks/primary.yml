@@ -1,0 +1,53 @@
+- name: 查询现有数据库
+  ansible.mysql.mysql_info:
+    filter: databases
+    login_unix_socket: "{{ mysql_socket }}"
+  register: mysql_dbs
+
+# init.sql 本身可重复执行，但大表导入很慢，只在库不存在时导入一次
+- name: 首次部署时导入 sql/init.sql
+  when: mall_db_name not in mysql_dbs.databases
+  block:
+    - name: 拷贝初始化脚本
+      ansible.builtin.copy:
+        src: "{{ repo_root }}/sql/init.sql"
+        dest: /root/mall-init.sql
+        mode: "0600"
+
+    - name: 导入初始化脚本
+      ansible.mysql.mysql_db:
+        name: all
+        state: import
+        target: /root/mall-init.sql
+        login_unix_socket: "{{ mysql_socket }}"
+
+- name: 应用账号（密码以 vault 为准，覆盖 init.sql 里的默认密码）
+  ansible.mysql.mysql_user:
+    name: "{{ mall_db_user }}"
+    host: "%"
+    password: "{{ mall_db_password }}"
+    priv: "{{ mall_db_name }}.*:SELECT,INSERT,UPDATE,DELETE"
+    login_unix_socket: "{{ mysql_socket }}"
+    state: present
+  no_log: true
+
+- name: 复制账号
+  ansible.mysql.mysql_user:
+    name: "{{ mysql_repl_user }}"
+    host: "{{ mysql_repl_host }}"
+    password: "{{ mysql_repl_password }}"
+    priv: "*.*:REPLICATION SLAVE"
+    login_unix_socket: "{{ mysql_socket }}"
+    state: present
+  no_log: true
+
+# 备份账号建在主库，会通过复制同步到从库
+- name: 备份账号（mysqldump --single-transaction --source-data 需要的最小权限）
+  ansible.mysql.mysql_user:
+    name: "{{ mysql_backup_user }}"
+    host: localhost
+    password: "{{ mysql_backup_password }}"
+    priv: "*.*:SELECT,SHOW VIEW,TRIGGER,LOCK TABLES,EVENT,RELOAD,REPLICATION CLIENT,PROCESS"
+    login_unix_socket: "{{ mysql_socket }}"
+    state: present
+  no_log: true

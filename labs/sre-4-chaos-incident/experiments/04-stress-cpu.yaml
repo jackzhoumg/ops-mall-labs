@@ -1,0 +1,24 @@
+# 实验 4：给 1 个 mall-api 容器加 CPU 压力，持续 3 分钟
+# 稳态假设：CPU limit 生效，被压的 Pod 变慢但不影响同节点其他 Pod；P95 < 1s；监控能看到 CPU 节流（throttling）。
+apiVersion: chaos-mesh.org/v1alpha1
+kind: StressChaos
+metadata:
+  name: mall-api-stress-cpu
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+    chaos.lab/drill: "sre-4"
+spec:
+  mode: one
+  selector:
+    namespaces:
+      - mall
+    labelSelectors:
+      app.kubernetes.io/name: mall-api
+  containerNames:
+    - mall-api
+  stressors:
+    cpu:
+      workers: 2
+      load: 80
+  duration: "3m"

@@ -1,0 +1,47 @@
+# kube-bench：在工作节点上跑 CIS Benchmark 的 node 部分（kubelet 配置、文件权限）。
+# 先 apply job-master.yaml（它会创建 kube-bench 命名空间）。
+#
+# 用法（k8s-master 上执行）：
+#   kubectl apply -f job-node.yaml
+#   kubectl -n kube-bench wait --for=condition=complete job/kube-bench-node --timeout=180s
+#   kubectl -n kube-bench logs job/kube-bench-node > kube-bench-node.txt
+# 想扫指定节点，把 nodeName 改成节点名（例如 k8s-node2）。
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kube-bench-node
+  namespace: kube-bench
+spec:
+  backoffLimit: 0
+  ttlSecondsAfterFinished: 86400
+  template:
+    spec:
+      hostPID: true
+      nodeName: k8s-node1
+      restartPolicy: Never
+      containers:
+        - name: kube-bench
+          image: docker.io/aquasec/kube-bench:v0.16.0
+          command:
+            - kube-bench
+            - run
+            - --targets
+            - node
+            - --benchmark
+            - cis-2.0
+          volumeMounts:
+            - { name: var-lib-kubelet, mountPath: /var/lib/kubelet, readOnly: true }
+            - { name: etc-systemd, mountPath: /etc/systemd, readOnly: true }
+            - { name: lib-systemd, mountPath: /lib/systemd/, readOnly: true }
+            - { name: etc-kubernetes, mountPath: /etc/kubernetes, readOnly: true }
+            - { name: usr-bin, mountPath: /usr/local/mount-from-host/bin, readOnly: true }
+            - { name: etc-passwd, mountPath: /etc/passwd, readOnly: true }
+            - { name: etc-group, mountPath: /etc/group, readOnly: true }
+      volumes:
+        - { name: var-lib-kubelet, hostPath: { path: /var/lib/kubelet } }
+        - { name: etc-systemd, hostPath: { path: /etc/systemd } }
+        - { name: lib-systemd, hostPath: { path: /lib/systemd } }
+        - { name: etc-kubernetes, hostPath: { path: /etc/kubernetes } }
+        - { name: usr-bin, hostPath: { path: /usr/bin } }
+        - { name: etc-passwd, hostPath: { path: /etc/passwd } }
+        - { name: etc-group, hostPath: { path: /etc/group } }

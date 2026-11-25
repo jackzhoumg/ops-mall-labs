@@ -1,0 +1,16 @@
+# MySQL 每日全备。安装见教程 5.4：
+#   sudo install -m 755 mysql/mysql-full-backup.sh /usr/local/bin/mall-mysql-full-backup
+#   sudo install -m 644 mysql/systemd/mall-mysql-full-backup.* /etc/systemd/system/
+[Unit]
+Description=mall MySQL full backup to MinIO
+After=mysqld.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=ENV_FILE=/etc/mall-backup/backup.env
+ExecStart=/usr/local/bin/mall-mysql-full-backup
+# 备份低优先级运行，减少对业务的影响
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

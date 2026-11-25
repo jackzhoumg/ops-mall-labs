@@ -1,0 +1,18 @@
+# 给 mall-api 设置资源 requests / limits。
+# HPA 的 CPU 利用率 = 实际用量 / requests，没有 requests 的话 HPA 算不出利用率，显示 <unknown>。
+#
+# 用法（k8s-master）：
+#   kubectl -n mall patch deployment mall-api --type strategic --patch-file k8s/mall-api-resources-patch.yaml
+# 容器名不是 mall-api 就改下面的 name。走 Lab 08 GitOps 的话，改 Helm values，不要手工 patch。
+spec:
+  template:
+    spec:
+      containers:
+        - name: mall-api
+          resources:
+            requests:
+              cpu: 250m       # 按压测结果定：单实例在目标 RPS 下的 CPU 用量
+              memory: 128Mi
+            limits:
+              cpu: "1"        # 实验集群节点小，限制一下防止单个 Pod 吃满节点；生产上很多团队不设 CPU limit，避免被限流（throttling）
+              memory: 256Mi   # 内存一定要设上限，泄漏时只杀这个 Pod，不拖垮节点

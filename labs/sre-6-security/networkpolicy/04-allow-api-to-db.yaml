@@ -1,0 +1,23 @@
+# 第 4 条：只有 mall-api 能出站访问数据库机器 lab-db1（192.168.56.13）的 MySQL 3306 和 Redis 6379。
+# 为什么写 IP 而不是 Service：mysql / redis 是无选择器 Service，流量经 kube-proxy 转换后，目的地址是
+# EndpointSlice 里的 192.168.56.13，NetworkPolicy 按转换后的真实地址匹配。网段不同的同学改成自己的数据库 IP。
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-api-egress-to-db
+  namespace: mall
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: mall-api
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 192.168.56.13/32
+      ports:
+        - protocol: TCP
+          port: 3306
+        - protocol: TCP
+          port: 6379

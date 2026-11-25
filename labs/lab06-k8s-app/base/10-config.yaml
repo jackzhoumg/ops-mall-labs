@@ -1,0 +1,20 @@
+# 非敏感配置：以环境变量注入 mall-api（envFrom）
+# 改了 ConfigMap 不会自动重启 Pod，要 kubectl -n mall rollout restart deployment/mall-api
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: mall-api-config
+  namespace: mall
+  labels:
+    app.kubernetes.io/name: mall-api
+    app.kubernetes.io/part-of: ops-mall
+data:
+  MALL_LISTEN: ":8080"
+  # redis 是 20-db-endpoints.yaml 里的无选择器 Service，实际指向 lab-db1
+  MALL_REDIS_ADDR: "redis.mall.svc:6379"
+  MALL_CACHE_TTL: "30s"
+  MALL_LOG_LEVEL: "info"
+  # 故障演练接口默认关闭，只在 faults/07-oomkilled.yaml 里打开
+  MALL_DEBUG: "false"
+  # 要小于 Pod 的 terminationGracePeriodSeconds（30s）减去 preStop 的 5s
+  MALL_SHUTDOWN_GRACE: "10s"

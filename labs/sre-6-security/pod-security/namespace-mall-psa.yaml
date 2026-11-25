@@ -1,0 +1,18 @@
+# 给 mall 命名空间打 Pod Security Admission 标签。
+# 分两步上：先只用 warn + audit 观察（不拦截），确认所有工作负载都合规后，再把 enforce 改成 restricted。
+#
+# 第一步（观察）：kubectl apply -f namespace-mall-psa.yaml
+# 第二步（强制）：把下面 enforce 的值从 baseline 改成 restricted，再 apply 一次
+#
+# 版本标签写成 latest 表示跟随集群版本的策略定义；想锁定策略版本可以写成 v1.36。
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: mall
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: latest
+    pod-security.kubernetes.io/warn: restricted
+    pod-security.kubernetes.io/warn-version: latest
+    pod-security.kubernetes.io/audit: restricted
+    pod-security.kubernetes.io/audit-version: latest

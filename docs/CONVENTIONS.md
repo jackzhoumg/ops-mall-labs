@@ -112,7 +112,7 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=v
 | ConfigMap / Secret | `mall-api-config`（非敏感环境变量）、`mall-api-secret`（键 `MALL_DB_DSN`、`MALL_REDIS_PASSWORD`） |
 | 数据库 | 无选择器 Service `mysql`（3306）、`redis`（6379）；EndpointSlice `mysql-external`、`redis-external`，标签 `kubernetes.io/service-name` 指向对应 Service，地址 192.168.56.13 |
 | 拉取 Harbor 镜像 | imagePullSecret `harbor-pull` |
-| mall-web 镜像 | 启动时用环境变量 `MALL_API_UPSTREAM`（默认 `mall-api:8080`）和 `NGINX_RESOLVER` 渲染 `/etc/nginx/templates/mall.conf.template`；K8s 里 `NGINX_RESOLVER` 设为集群 DNS（kubeadm 默认 `10.96.0.10`）。不要另外挂载 `/etc/nginx/conf.d/default.conf` |
+| mall-web 镜像 | 启动时用环境变量 `MALL_API_UPSTREAM`（默认 `mall-api:8080`）和 `NGINX_RESOLVER` 渲染 `/etc/nginx/templates/mall.conf.template`；K8s 里 `NGINX_RESOLVER` 设为集群 DNS（kubeadm 默认 `10.96.0.10`），`MALL_API_UPSTREAM` 必须写完整域名 `mall-api.<命名空间>.svc.cluster.local:8080`（nginx 的 resolver 不读 search 域）。不要另外挂载 `/etc/nginx/conf.d/default.conf` |
 | 环境命名空间 | `mall`（Lab 06 / Lab 07 开发测试环境）、`mall-staging`、`mall-prod`（Lab 08） |
 
 ## 4. 仓库目录

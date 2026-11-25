@@ -1,0 +1,5 @@
+# 让 argocd-server 以 HTTP 提供服务，TLS 交给网关（或实验环境直接用 HTTP）
+# kubectl -n argocd patch configmap argocd-cmd-params-cm --type merge --patch-file labs/lab08-gitops/argocd/argocd-cmd-params-patch.yaml
+# kubectl -n argocd rollout restart deployment argocd-server
+data:
+  server.insecure: "true"

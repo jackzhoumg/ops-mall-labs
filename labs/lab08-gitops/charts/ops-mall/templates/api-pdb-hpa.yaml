@@ -1,0 +1,44 @@
+{{- $api := .Values.api -}}
+{{- $ctx := dict "root" . "name" $api.name -}}
+{{- if $api.pdb.enabled }}
+# 节点维护（kubectl drain）时，保证至少 minAvailable 个 mall-api 在线
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ $api.name }}
+  labels:
+    {{- include "ops-mall.labels" $ctx | nindent 4 }}
+spec:
+  minAvailable: {{ $api.pdb.minAvailable }}
+  selector:
+    matchLabels:
+      {{- include "ops-mall.selectorLabels" $ctx | nindent 6 }}
+{{- end }}
+{{- if $api.hpa.enabled }}
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: {{ $api.name }}
+  labels:
+    {{- include "ops-mall.labels" $ctx | nindent 4 }}
+spec:
+  scaleTargetRef:
+    {{- if $api.rollout.enabled }}
+    apiVersion: argoproj.io/v1alpha1
+    kind: Rollout
+    {{- else }}
+    apiVersion: apps/v1
+    kind: Deployment
+    {{- end }}
+    name: {{ $api.name }}
+  minReplicas: {{ $api.hpa.minReplicas }}
+  maxReplicas: {{ $api.hpa.maxReplicas }}
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: {{ $api.hpa.targetCPUUtilizationPercentage }}
+{{- end }}

@@ -1,0 +1,16 @@
+# mall-web 非 root 版本：基于 nginx 官方的 unprivileged 镜像（以 UID 101 运行，监听 8080）。
+# 官方 nginx 镜像默认以 root 启动并监听 80 端口，过不了 Pod Security restricted。
+#
+# 构建（构建上下文是仓库根目录，在 lab-dev 上执行）：
+#   docker build -f labs/sre-6-security/pod-security/mall-web-nonroot/Dockerfile.web-nonroot \
+#     -t harbor.lab.local/mall/mall-web:v1.0.0-nonroot .
+#   docker push harbor.lab.local/mall/mall-web:v1.0.0-nonroot
+#
+# 写作时版本 nginx-unprivileged 1.30.6-alpine（stable 分支），以 Docker Hub 上的最新 stable 为准。
+FROM nginxinc/nginx-unprivileged:1.30.6-alpine
+
+COPY labs/sre-6-security/pod-security/mall-web-nonroot/default.conf /etc/nginx/conf.d/default.conf
+COPY web/index.html /usr/share/nginx/html/index.html
+
+EXPOSE 8080
+USER 101

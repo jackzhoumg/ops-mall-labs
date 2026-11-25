@@ -1,0 +1,27 @@
+# 示例（学完 Lab 09 再用）：用 Prometheus 指标自动判断金丝雀版本是否健康
+# mall-prod 整体 5xx 比例超过 5% 就判定失败，Rollout 自动中止并回到稳定版本
+# （要只看新版本的错误率，需要指标里带版本或 Pod 标签，Lab 09 再细化）
+# 使用方法：apply 到 mall-prod 后，在 values-prod.yaml 的 rollout.steps 里加一步：
+#   - analysis:
+#       templates:
+#         - templateName: mall-api-error-rate
+# Prometheus 地址以 Lab 09 实际安装为准
+apiVersion: argoproj.io/v1alpha1
+kind: AnalysisTemplate
+metadata:
+  name: mall-api-error-rate
+  namespace: mall-prod
+spec:
+  metrics:
+    - name: error-rate
+      interval: 30s
+      count: 4
+      failureLimit: 1
+      successCondition: len(result) == 0 || isNaN(result[0]) || result[0] < 0.05
+      provider:
+        prometheus:
+          address: http://prometheus.monitoring.svc:9090
+          query: |
+            sum(rate(mall_http_requests_total{namespace="mall-prod",status=~"5.."}[1m]))
+            /
+            sum(rate(mall_http_requests_total{namespace="mall-prod"}[1m]))

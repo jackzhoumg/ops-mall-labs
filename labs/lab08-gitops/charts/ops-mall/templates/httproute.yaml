@@ -1,0 +1,55 @@
+{{- if .Values.httpRoute.enabled }}
+{{- $api := .Values.api -}}
+{{- $web := .Values.web -}}
+# 拆成两个 HTTPRoute：金丝雀插件只改 mall-api 这条的权重，不碰前端路由。
+# 同一个域名下，网关按最长前缀匹配：/api 走 mall-api，其他走 mall-web
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $api.name }}
+  labels:
+    {{- include "ops-mall.labels" (dict "root" . "name" $api.name) | nindent 4 }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.httpRoute.parentRefs | nindent 4 }}
+  hostnames:
+    {{- toYaml .Values.httpRoute.hostnames | nindent 4 }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: {{ .Values.httpRoute.apiPathPrefix }}
+      backendRefs:
+        {{- if and $api.rollout.enabled (eq $api.rollout.trafficRouting "gatewayapi") }}
+        # 权重由 Argo Rollouts 插件在发布过程中修改，ArgoCD 要忽略这里的差异
+        - name: {{ $api.name }}-stable
+          port: {{ $api.containerPort }}
+          weight: 100
+        - name: {{ $api.name }}-canary
+          port: {{ $api.containerPort }}
+          weight: 0
+        {{- else }}
+        - name: {{ $api.name }}
+          port: {{ $api.containerPort }}
+        {{- end }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: {{ $web.name }}
+  labels:
+    {{- include "ops-mall.labels" (dict "root" . "name" $web.name) | nindent 4 }}
+spec:
+  parentRefs:
+    {{- toYaml .Values.httpRoute.parentRefs | nindent 4 }}
+  hostnames:
+    {{- toYaml .Values.httpRoute.hostnames | nindent 4 }}
+  rules:
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: {{ $web.name }}
+          port: 80
+{{- end }}

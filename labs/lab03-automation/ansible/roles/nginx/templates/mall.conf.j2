@@ -1,0 +1,60 @@
+# {{ ansible_managed }}
+# ops-mall 站点：静态页面 + /api/ 反代到两台 mall-api
+
+# ops 日志格式 = combined + 上游耗时 + 请求总耗时（最后一列），nginx_log_stats.sh 用最后一列统计慢请求
+log_format ops '$remote_addr - $remote_user [$time_local] "$request" '
+               '$status $body_bytes_sent "$http_referer" "$http_user_agent" '
+               '$upstream_response_time $request_time';
+
+upstream mall_api {
+{% for ip in nginx_upstream_servers %}
+    server {{ ip }}:{{ mall_api_port | default(8080) }} max_fails=3 fail_timeout=10s;
+{% endfor %}
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name {{ mall_domain }} {{ mall_vip }};
+    access_log /var/log/nginx/access.log ops;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    # Rocky 9 自带 Nginx 1.20，还不支持单独的 http2 指令，写在 listen 上
+    listen 443 ssl http2;
+    server_name {{ mall_domain }} {{ mall_vip }};
+
+    ssl_certificate     {{ nginx_ssl_dir }}/{{ mall_domain }}.crt;
+    ssl_certificate_key {{ nginx_ssl_dir }}/{{ mall_domain }}.key;
+    ssl_protocols       TLSv1.2 TLSv1.3;
+    ssl_session_cache   shared:SSL:10m;
+
+    access_log /var/log/nginx/access.log ops;
+    root {{ nginx_web_root }};
+
+    location / {
+        try_files $uri /index.html;
+    }
+
+    location /api/ {
+        proxy_pass http://mall_api;
+        proxy_http_version 1.1;
+        proxy_set_header Connection "";
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        # 把 Nginx 生成的请求 ID 传给 mall-api，Nginx 日志和应用日志能对上
+        proxy_set_header X-Request-ID $request_id;
+        proxy_connect_timeout 3s;
+        proxy_read_timeout 30s;
+        # 一台 mall-api 挂了自动换另一台重试；POST 默认不重试，防止重复下单
+        proxy_next_upstream error timeout http_502 http_503;
+    }
+
+    location = /nginx-health {
+        access_log off;
+        return 200 "ok\n";
+    }
+}

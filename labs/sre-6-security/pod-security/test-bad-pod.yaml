@@ -1,0 +1,24 @@
+# 反面教材：一个“什么都要”的 Pod。mall 命名空间 enforce=restricted 之后，apply 应该被直接拒绝。
+# 用法：kubectl apply -f test-bad-pod.yaml   （预期报错 violates PodSecurity "restricted:latest"）
+apiVersion: v1
+kind: Pod
+metadata:
+  name: bad-pod
+  namespace: mall
+spec:
+  hostNetwork: true
+  hostPID: true
+  containers:
+    - name: shell
+      image: harbor.lab.local/library/busybox:1.38
+      command: ["sleep", "3600"]
+      securityContext:
+        privileged: true
+        runAsUser: 0
+      volumeMounts:
+        - name: host-root
+          mountPath: /host
+  volumes:
+    - name: host-root
+      hostPath:
+        path: /

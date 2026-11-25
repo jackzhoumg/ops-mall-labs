@@ -1,0 +1,27 @@
+# 实验 3：mall-api 到数据库机器丢包 30%，持续 3 分钟
+# 稳态假设：错误率 < 1%（应用和驱动有重试 / 连接池时应该扛得住），P95 < 2s。
+# 爆炸半径：mode: fixed + value: "1"，只对 1 个 Pod 注入，另一个 Pod 作为对照组。
+apiVersion: chaos-mesh.org/v1alpha1
+kind: NetworkChaos
+metadata:
+  name: mall-api-loss-to-db
+  namespace: mall
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+    chaos.lab/drill: "sre-4"
+spec:
+  action: loss
+  mode: fixed
+  value: "1"
+  selector:
+    namespaces:
+      - mall
+    labelSelectors:
+      app.kubernetes.io/name: mall-api
+  direction: to
+  externalTargets:
+    - 192.168.56.13
+  loss:
+    loss: "30"
+    correlation: "25"
+  duration: "3m"

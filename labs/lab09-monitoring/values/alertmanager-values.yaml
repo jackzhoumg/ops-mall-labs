@@ -1,0 +1,106 @@
+# Lab 09：Alertmanager 路由、分组、抑制、静默时段
+# 和 kube-prometheus-stack-values.yaml 一起传给 helm（-f 两个文件，后面的覆盖前面的）。
+#
+# 通知链路：Alertmanager --webhook--> alert-bridge（本实验自带的转换服务）--> 企业微信 / 钉钉群机器人
+# 为什么要转换服务：Alertmanager 原生 wechat_configs 走的是企业微信"自建应用"API
+# （要 corp_id、agent_id、应用 secret，还要配可信 IP），不是群机器人 webhook；
+# 原生也没有钉钉接收器。群机器人要的 JSON 格式和 Alertmanager webhook 发出的格式不一样，中间必须转一下。
+
+alertmanager:
+  config:
+    global:
+      resolve_timeout: 5m
+
+    route:
+      # 兜底接收人：没匹配到下面任何子路由的告警发到运维群
+      receiver: ops-wecom
+      # 同一个告警名 + 命名空间 + 级别 的告警合并成一条消息，防止 10 个 Pod 一起报错刷屏 10 条
+      group_by: ["alertname", "namespace", "severity"]
+      # 第一条告警来了先等 30s，把同一组里陆续到的告警攒在一起发
+      group_wait: 30s
+      # 同一组有新告警加入时，最快 5 分钟再发一次
+      group_interval: 5m
+      # 告警一直没恢复，每 4 小时提醒一次
+      repeat_interval: 4h
+      routes:
+        # Watchdog 是"心跳告警"，永远在 firing，用来证明告警链路活着；InfoInhibitor 只用于抑制。都不发群。
+        - receiver: "null"
+          matchers:
+            - alertname =~ "Watchdog|InfoInhibitor"
+
+        # P1（critical）：值班群 + 钉钉，等待时间短、重复提醒频繁
+        - receiver: oncall-p1
+          matchers:
+            - severity = "critical"
+          group_wait: 10s
+          group_interval: 2m
+          repeat_interval: 30m
+
+        # P2（warning）：运维群，工作时间处理
+        - receiver: ops-wecom
+          matchers:
+            - severity = "warning"
+
+        # P3（info）：只在白天发，晚上静音，第二天一起看
+        - receiver: ops-wecom
+          matchers:
+            - severity = "info"
+          repeat_interval: 24h
+          mute_time_intervals:
+            - offhours
+
+    # 抑制：根因告警在响时，把由它引起的"症状告警"压住，避免一次故障收到十几条消息
+    inhibit_rules:
+      # 同一个告警既有 critical 又有 warning 两档阈值时，critical 在响就不再发 warning。
+      # equal 里带上 instance、mountpoint：否则 lab-db1 的 / 分区 critical 会把 lab-web1 的 warning 也压掉
+      # （虚拟机告警没有 namespace 标签，两边都为空也算"相等"）。
+      - source_matchers:
+          - severity = "critical"
+        target_matchers:
+          - severity =~ "warning|info"
+        equal: ["alertname", "namespace", "instance", "mountpoint"]
+      # 整个 mall-api 都挂了，就别再报错误率高、延迟高、单实例挂了
+      - source_matchers:
+          - alertname = "MallApiDown"
+        target_matchers:
+          - alertname =~ "MallApiHighErrorRate|MallApiHighLatency|MallApiInstanceDown"
+        equal: ["namespace"]
+      # 虚拟机整台不可达时，这台机器上的 CPU、磁盘、MySQL、Redis 告警都压住
+      - source_matchers:
+          - alertname = "HostDown"
+        target_matchers:
+          - alertname =~ "Host.+|Mysql.+|Redis.+"
+          - alertname != "HostDown"
+        equal: ["hostname"]
+      # MySQL 进程挂了，复制延迟、连接数告警没有意义
+      - source_matchers:
+          - alertname = "MysqlDown"
+        target_matchers:
+          - alertname =~ "MysqlReplication.+|MysqlTooManyConnections"
+        equal: ["hostname"]
+
+    time_intervals:
+      - name: offhours
+        time_intervals:
+          - times:
+              - start_time: "20:00"
+                end_time: "24:00"
+              - start_time: "00:00"
+                end_time: "09:00"
+            location: Asia/Shanghai
+
+    receivers:
+      - name: "null"
+      - name: ops-wecom
+        webhook_configs:
+          - url: http://alert-bridge.monitoring.svc:8080/wecom/ops
+            send_resolved: true
+            max_alerts: 20
+      - name: oncall-p1
+        webhook_configs:
+          - url: http://alert-bridge.monitoring.svc:8080/wecom/oncall
+            send_resolved: true
+            max_alerts: 20
+          - url: http://alert-bridge.monitoring.svc:8080/dingtalk/oncall
+            send_resolved: true
+            max_alerts: 20

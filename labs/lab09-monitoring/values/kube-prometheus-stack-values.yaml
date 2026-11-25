@@ -1,0 +1,139 @@
+# Lab 09：kube-prometheus-stack 实验环境 values
+# 写作时版本：chart 93.9.0（Prometheus Operator v0.95.2、Prometheus v3.16.0、
+#             Alertmanager v0.35.0、Grafana 13.3.1）。以官方最新文档为准。
+#
+# 用法（在 k8s-master 上执行）：
+#   helm upgrade --install kube-prometheus-stack \
+#     oci://ghcr.io/prometheus-community/charts/kube-prometheus-stack \
+#     --version 93.9.0 -n monitoring --create-namespace \
+#     -f values/kube-prometheus-stack-values.yaml \
+#     -f values/alertmanager-values.yaml
+#
+# 设计思路：实验集群只有 3 台 2C4G，监控全家桶要控制在 2.5Gi 内存左右。
+# 所以：单副本、短保留、给每个组件都写 requests/limits，关掉 kubeadm 集群里抓不到的组件。
+
+# ---------- 关掉实验环境抓不到、只会制造 TargetDown 告警的组件 ----------
+# kubeadm 默认把 controller-manager / scheduler / etcd 的指标端口绑在 127.0.0.1，
+# Prometheus 从 Pod 网络访问不到。生产上会改 bind-address 后再打开，实验里先关掉，避免一装好就满屏红。
+kubeControllerManager:
+  enabled: false
+kubeScheduler:
+  enabled: false
+kubeEtcd:
+  enabled: false
+# Calico 默认不跑 kube-proxy 的 IPVS 指标端口给外部，同理关掉。
+kubeProxy:
+  enabled: false
+
+# Windows 节点用不到
+windowsMonitoring:
+  enabled: false
+
+# ---------- Prometheus Operator ----------
+prometheusOperator:
+  resources:
+    requests:
+      cpu: 50m
+      memory: 96Mi
+    limits:
+      memory: 256Mi
+
+# ---------- Prometheus ----------
+prometheus:
+  prometheusSpec:
+    replicas: 1
+    # 保留 3 天或 4GiB，先到哪个算哪个。生产常见 15d 起步，再长就交给 Thanos / VictoriaMetrics。
+    retention: 3d
+    retentionSize: 4GiB
+    scrapeInterval: 30s
+    evaluationInterval: 30s
+    # 告警消息里的 "查看图表" 链接会用这个地址
+    externalUrl: http://prometheus.lab.local
+    resources:
+      requests:
+        cpu: 200m
+        memory: 512Mi
+      limits:
+        memory: 1536Mi
+
+    # 下面 5 个开关是新手最容易踩的坑：
+    # 默认值为 true 时，Prometheus 只认带 release=kube-prometheus-stack 标签的
+    # ServiceMonitor / PodMonitor / Probe / PrometheusRule / ScrapeConfig。
+    # 改成 false 后，集群里所有命名空间的这几类对象都会被选中。
+    serviceMonitorSelectorNilUsesHelmValues: false
+    podMonitorSelectorNilUsesHelmValues: false
+    probeSelectorNilUsesHelmValues: false
+    ruleSelectorNilUsesHelmValues: false
+    scrapeConfigSelectorNilUsesHelmValues: false
+
+    # 存储：默认不写 storageSpec，数据放在 emptyDir，Pod 重建就丢。
+    # 集群有默认 StorageClass（kubectl get sc）时，取消下面的注释，数据才能跨重启保留。
+    # storageSpec:
+    #   volumeClaimTemplate:
+    #     spec:
+    #       accessModes: ["ReadWriteOnce"]
+    #       resources:
+    #         requests:
+    #           storage: 5Gi
+
+# ---------- Alertmanager（路由和接收人在 alertmanager-values.yaml 里） ----------
+alertmanager:
+  alertmanagerSpec:
+    replicas: 1
+    # 静默（silence）和通知记录保存 5 天。没有持久卷时 Pod 重建会丢静默，实验里可以接受。
+    retention: 120h
+    # 课程约定没有给 Alertmanager 分配域名，用 kubectl port-forward 访问，地址写本机
+    externalUrl: http://127.0.0.1:9093
+    resources:
+      requests:
+        cpu: 20m
+        memory: 64Mi
+      limits:
+        memory: 128Mi
+
+# ---------- Grafana ----------
+grafana:
+  # 实验用密码。正式环境用 admin.existingSecret 引用 Secret，不要把密码写进 Git。
+  adminPassword: "LabGrafana123"
+  grafana.ini:
+    server:
+      root_url: http://grafana.lab.local
+    users:
+      default_theme: light
+  resources:
+    requests:
+      cpu: 50m
+      memory: 192Mi
+    limits:
+      memory: 512Mi
+  # sidecar 默认已开启：带 grafana_dashboard=1 标签的 ConfigMap 自动导入成大盘，
+  # 带 grafana_datasource=1 标签的 ConfigMap 自动导入成数据源（Lab 10 加 Loki 用到）。
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+      # 大盘 ConfigMap 上加 grafana_folder 注解，就能放进指定文件夹
+      folderAnnotation: grafana_folder
+      provider:
+        foldersFromFilesStructure: true
+    datasources:
+      enabled: true
+
+# ---------- kube-state-metrics / node-exporter ----------
+kube-state-metrics:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 64Mi
+    limits:
+      memory: 192Mi
+
+prometheus-node-exporter:
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      memory: 96Mi

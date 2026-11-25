@@ -1,0 +1,11 @@
+# 复制成 terraform.tfvars 后修改。terraform.tfvars 已在 .gitignore 里。
+env        = "dev"
+region     = "cn-hangzhou"
+admin_cidr = "203.0.113.10/32" # 改成 curl -s https://ifconfig.me 的结果 + /32
+
+# 想控制成本可以指定规格，留空则按 2C4G 自动挑
+# instance_type = "ecs.e-c1m2.large"
+
+# instances = {
+#   "lab-web1" = { private_ip = "172.16.1.11", groups = ["web"] }
+# }

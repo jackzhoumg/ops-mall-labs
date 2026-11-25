@@ -1,0 +1,118 @@
+- name: 安装 Nginx
+  ansible.builtin.dnf:
+    name: nginx
+    state: present
+
+# ---------- 证书：在控制节点生成一次，两台 web 用同一张 ----------
+- name: 控制节点证书目录
+  ansible.builtin.file:
+    path: "{{ nginx_cert_local_dir }}"
+    state: directory
+    mode: "0700"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: 控制节点写 openssl 配置（带 SAN，现代浏览器只认 SAN 不认 CN）
+  ansible.builtin.template:
+    src: openssl-san.cnf.j2
+    dest: "{{ nginx_cert_local_dir }}/openssl-san.cnf"
+    mode: "0600"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: 控制节点生成自签证书（已存在就跳过；Lab 02 的证书改名放进来可以直接复用）
+  ansible.builtin.command:
+    # 用 -config 指定 SAN，macOS 自带的 LibreSSL 和 Linux 的 OpenSSL 都支持
+    cmd: >-
+      openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days {{ nginx_cert_days }}
+      -config {{ nginx_cert_local_dir }}/openssl-san.cnf -extensions san
+      -keyout {{ nginx_cert_local_dir }}/{{ mall_domain }}.key
+      -out {{ nginx_cert_local_dir }}/{{ mall_domain }}.crt
+    creates: "{{ nginx_cert_local_dir }}/{{ mall_domain }}.crt"
+  delegate_to: localhost
+  become: false
+  run_once: true
+
+- name: 证书目录
+  ansible.builtin.file:
+    path: "{{ nginx_ssl_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: 拷贝证书和私钥
+  ansible.builtin.copy:
+    src: "{{ nginx_cert_local_dir }}/{{ mall_domain }}.{{ item.ext }}"
+    dest: "{{ nginx_ssl_dir }}/{{ mall_domain }}.{{ item.ext }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { ext: crt, mode: "0644" }
+    - { ext: key, mode: "0600" }
+  notify: reload nginx
+
+# ---------- 前端页面和站点配置 ----------
+- name: 前端目录
+  ansible.builtin.file:
+    path: "{{ nginx_web_root }}"
+    state: directory
+    mode: "0755"
+
+- name: 拷贝前端页面
+  ansible.builtin.copy:
+    src: "{{ repo_root }}/web/index.html"
+    dest: "{{ nginx_web_root }}/index.html"
+    mode: "0644"
+
+- name: 站点配置
+  ansible.builtin.template:
+    src: mall.conf.j2
+    dest: /etc/nginx/conf.d/mall.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: reload nginx
+
+# SELinux 默认不允许 nginx 主动连网络端口，反代到 8080 会报 502，
+# audit.log 里能看到 avc: denied { name_connect }。打开这个布尔值，不要关 SELinux。
+- name: 允许 nginx 反向代理连后端
+  ansible.posix.seboolean:
+    name: httpd_can_network_connect
+    state: true
+    persistent: true
+  when: ansible_facts['selinux']['status'] == 'enabled'
+
+- name: 防火墙开放 http / https
+  ansible.posix.firewalld:
+    service: "{{ item }}"
+    permanent: true
+    immediate: true
+    state: enabled
+  loop:
+    - http
+    - https
+
+- name: 启动 Nginx
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: started
+    enabled: true
+
+- name: 有变更就现在 reload
+  ansible.builtin.meta: flush_handlers
+
+- name: 经 Nginx 访问商品接口
+  ansible.builtin.uri:
+    url: "https://127.0.0.1/api/products"
+    headers:
+      Host: "{{ mall_domain }}"
+    validate_certs: false
+    status_code: 200
+  register: nginx_check
+  retries: 5
+  delay: 2
+  until: nginx_check.status == 200

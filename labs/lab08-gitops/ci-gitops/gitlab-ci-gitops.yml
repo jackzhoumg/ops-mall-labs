@@ -1,0 +1,62 @@
+# Lab 08：GitOps 版本的 GitLab CI
+# 用法：用这个文件替换仓库根目录的 .gitlab-ci.yml
+#   cp labs/lab08-gitops/ci-gitops/gitlab-ci-gitops.yml .gitlab-ci.yml
+#
+# 复用 Lab 07 的 test / build / scan / push，去掉直接 kubectl 的 deploy，换成两个 GitOps job：
+#   update-staging  main 分支自动执行：改 values-staging.yaml 的 tag 并推送，ArgoCD 自动同步预发
+#   promote-prod    手动点击：把同一个 tag 写进 values-prod.yaml，ArgoCD 显示 OutOfSync，值班的人手动同步
+#
+# 新增 CI/CD 变量：
+#   GITOPS_USER   项目访问令牌对应的机器人用户名（Protected）
+#   GITOPS_TOKEN  项目访问令牌，角色 Developer 以上、权限 write_repository（Masked + Protected）
+# main 分支是受保护分支时，要允许这个机器人用户推送（或改用合并请求方式晋升，见教程）
+
+include:
+  - local: labs/lab07-cicd/.gitlab-ci.yml
+
+variables:
+  GITOPS_REPO: gitlab.lab.local/ops/ops-mall-labs.git
+  GITOPS_BRANCH: main
+
+# 关掉 Lab 07 的直接发布
+deploy:
+  rules:
+    - when: never
+
+update-staging:
+  stage: deploy
+  image: $CI_TOOLS_IMAGE
+  # 同一时间只允许一个 job 改 Git，后来的排队
+  resource_group: gitops-staging
+  environment:
+    name: staging
+    url: http://mall-staging.lab.local
+  rules:
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+  before_script:
+    # 与 Lab 07 的 .image-tag 规则相同（v* 标签用标签名，否则用短提交号）
+    - export IMAGE_TAG="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+    - echo "IMAGE_TAG=$IMAGE_TAG"
+  script:
+    - ENV_NAME=staging bash labs/lab08-gitops/ci-gitops/update-image-tag.sh
+
+promote-prod:
+  stage: deploy
+  image: $CI_TOOLS_IMAGE
+  needs:
+    - update-staging
+  resource_group: gitops-prod
+  environment:
+    name: production
+    url: http://mall-prod.lab.local
+  rules:
+    # 只有 v* 标签（正式版本）才允许进生产；手动点击
+    - if: $CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+$/
+      when: manual
+  before_script:
+    # 与 Lab 07 的 .image-tag 规则相同（v* 标签用标签名，否则用短提交号）
+    - export IMAGE_TAG="${CI_COMMIT_TAG:-$CI_COMMIT_SHORT_SHA}"
+    - echo "IMAGE_TAG=$IMAGE_TAG"
+  script:
+    - ENV_NAME=prod bash labs/lab08-gitops/ci-gitops/update-image-tag.sh

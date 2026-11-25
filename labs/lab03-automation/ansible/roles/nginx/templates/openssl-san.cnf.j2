@@ -1,0 +1,13 @@
+# {{ ansible_managed }}
+[req]
+distinguished_name = dn
+prompt = no
+
+[dn]
+CN = {{ mall_domain }}
+
+[san]
+subjectAltName = DNS:{{ mall_domain }}, IP:{{ mall_vip }}
+basicConstraints = CA:FALSE
+keyUsage = digitalSignature, keyEncipherment
+extendedKeyUsage = serverAuth

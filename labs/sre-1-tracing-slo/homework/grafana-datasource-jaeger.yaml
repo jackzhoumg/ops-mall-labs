@@ -1,0 +1,29 @@
+# 课后作业：给 Lab 09 的 Grafana 加 Jaeger 数据源（sidecar 自动导入）。
+# 用法（k8s-master）：kubectl apply -f homework/grafana-datasource-jaeger.yaml
+#
+# 然后在 Lab 10 的 loki/grafana-datasource-loki.yaml 里，给 Loki-mall 的 derivedFields 追加一项，
+# 日志里的 trace_id 就能一键跳到 Jaeger 链路：
+#
+#   - name: trace_id
+#     matcherRegex: '"trace_id":"(\w+)"'
+#     url: '$${__value.raw}'
+#     urlDisplayLabel: 查看链路
+#     datasourceUid: jaeger
+#
+# 改完 kubectl apply 那个文件，等 1 分钟左右 Grafana 重新加载数据源。
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: jaeger-datasource
+  namespace: monitoring
+  labels:
+    grafana_datasource: "1"
+data:
+  jaeger-datasource.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Jaeger
+        uid: jaeger
+        type: jaeger
+        access: proxy
+        url: http://jaeger.monitoring.svc:16686

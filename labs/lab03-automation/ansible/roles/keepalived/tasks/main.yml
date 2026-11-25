@@ -1,0 +1,35 @@
+- name: 安装 Keepalived
+  ansible.builtin.dnf:
+    name: keepalived
+    state: present
+
+- name: 确认 VIP 网卡存在
+  ansible.builtin.assert:
+    that: keepalived_interface in ansible_facts['interfaces']
+    fail_msg: >-
+      网卡 {{ keepalived_interface }} 不存在，本机网卡有：{{ ansible_facts['interfaces'] | join(', ') }}。
+      在 group_vars/web.yml 里改 keepalived_interface
+
+- name: 生成 keepalived.conf
+  ansible.builtin.template:
+    src: keepalived.conf.j2
+    dest: /etc/keepalived/keepalived.conf
+    owner: root
+    group: root
+    mode: "0600"
+  diff: false
+  notify: restart keepalived
+
+# VRRP 是 IP 协议号 112，不是 TCP/UDP 端口，firewalld 要用 rich rule 放行
+- name: 防火墙放行 VRRP
+  ansible.posix.firewalld:
+    rich_rule: 'rule protocol value="vrrp" accept'
+    permanent: true
+    immediate: true
+    state: enabled
+
+- name: 启动 Keepalived
+  ansible.builtin.systemd_service:
+    name: keepalived
+    state: started
+    enabled: true

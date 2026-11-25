@@ -1,0 +1,109 @@
+# Node-1：钱包节点告警规则
+# 指标来源：
+#   Geth（/debug/metrics/prometheus）：chain_head_block、chain_head_finalized、p2p_peers
+#   Lighthouse（:5054/metrics）：beacon_head_slot、slotclock_present_slot、beacon_head_state_finalized_epoch、
+#                               slotclock_present_epoch、libp2p_peers
+#   height_check.py（:9701）：eth_node_up、eth_node_height_lag_blocks、eth_node_block_age_seconds
+# 级别：critical = 影响充值提现，马上处理；warning = 工作时间处理
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: eth-wallet-node
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  groups:
+    - name: eth-wallet-node
+      rules:
+        - alert: EthExecutionClientDown
+          expr: up{job="eth-geth"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} Geth 指标抓取失败"
+            description: "Geth 进程可能退出了。看 docker compose ps / journalctl -u geth，注意是不是磁盘剩余空间低于 minfreedisk 自动停机。"
+        - alert: EthConsensusClientDown
+          expr: up{job="eth-lighthouse"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} Lighthouse 指标抓取失败"
+            description: "共识层挂了，执行层会停在当前高度不再前进。"
+        # 节点"卡住"：5 分钟高度没有变化（正常 5 分钟约 25 个块）
+        - alert: EthBlockHeightStalled
+          expr: changes(chain_head_block{job="eth-geth"}[5m]) == 0
+          for: 1m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.hostname }} 区块高度 5 分钟没有增长"
+            description: "停在 {{ $value }}。先看共识层是否同步、对等节点数、Engine API（JWT）日志。充值扫块此时读到的是旧数据。"
+        # 和其他节点 / 公共节点比，落后太多
+        - alert: EthNodeHeightLag
+          expr: eth_node_height_lag_blocks{role="local"} > 10
+          for: 3m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.node }} 落后最高高度 {{ $value }} 个块"
+            description: "持续 3 分钟落后超过 10 个块（约 2 分钟）。如果是负载均衡里的主节点，考虑先切到备节点。"
+        - alert: EthNodeHeightLag
+          expr: eth_node_height_lag_blocks{role="local"} > 50
+          for: 3m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.node }} 落后最高高度 {{ $value }} 个块"
+            description: "落后超过 50 个块（约 10 分钟），充值确认会明显延迟。立刻把这台从 RPC 负载均衡里摘掉。"
+        - alert: EthNodeRpcDown
+          expr: eth_node_up{role="local"} == 0
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.node }} JSON-RPC 不可用"
+            description: "height-check 连不上这个节点的 RPC。"
+        - alert: EthHeadBlockTooOld
+          expr: eth_node_block_age_seconds{role="local"} > 120
+          for: 2m
+          labels:
+            severity: critical
+          annotations:
+            summary: "{{ $labels.node }} 最新区块是 {{ $value }} 秒前的"
+            description: "以太坊 12 秒一个 slot，最新区块超过 2 分钟没更新，节点基本可以确定卡住了。"
+        - alert: EthBeaconHeadLag
+          expr: (slotclock_present_slot{job="eth-lighthouse"} - beacon_head_slot{job="eth-lighthouse"}) > 8
+          for: 5m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} 共识层落后当前 slot {{ $value }} 个"
+            description: "共识层头部落后超过 8 个 slot（约 1.5 分钟）。看 Lighthouse 日志里的 Syncing / peers。"
+        - alert: EthFinalityStalled
+          expr: (slotclock_present_epoch{job="eth-lighthouse"} - beacon_head_state_finalized_epoch{job="eth-lighthouse"}) > 4
+          for: 15m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} 最终确认（finalized）落后 {{ $value }} 个 epoch"
+            description: "正常落后 2 个 epoch。所有节点都这样说明全网没有最终确认（测试网偶尔发生），钱包应暂停把充值标记为最终到账。"
+        - alert: EthLowPeers
+          expr: p2p_peers{job="eth-geth"} < 5 or libp2p_peers{job="eth-lighthouse"} < 10
+          for: 10m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.hostname }} {{ $labels.job }} 对等节点数 {{ $value }}"
+            description: "检查 P2P 端口（30303 TCP/UDP、9000 TCP/UDP、9001 UDP）是否对公网开放，NAT 是否映射。"
+        - alert: EthNodeDiskWillFill
+          expr: |
+            predict_linear(node_filesystem_avail_bytes{job="eth-node-exporter", mountpoint="/data"}[6h], 7 * 86400) < 0
+          for: 30m
+          labels:
+            severity: warning
+          annotations:
+            summary: "{{ $labels.instance }} /data 预计 7 天内写满"
+            description: "链数据持续增长。提前扩容，或者评估裁剪（Geth 的 history 参数）。Geth 剩余 20GB 会自动停机。"

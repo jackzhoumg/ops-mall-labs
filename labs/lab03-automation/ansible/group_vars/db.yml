@@ -1,0 +1,2 @@
+# db 组：MySQL 主从
+inspect_services: "sshd chronyd mysqld"

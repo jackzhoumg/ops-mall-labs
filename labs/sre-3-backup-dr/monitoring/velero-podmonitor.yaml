@@ -1,0 +1,23 @@
+# 让 Prometheus 抓取 Velero 服务端指标（默认 :8085/metrics）。
+# 用法（k8s-master）：kubectl apply -f monitoring/velero-podmonitor.yaml
+# 端口名先确认：kubectl -n velero get pod -l component=velero -o jsonpath='{.items[0].spec.containers[0].ports}'
+# 8085 对应的 name 不是 metrics 就改下面的 port。
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: velero
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/part-of: ops-mall
+spec:
+  namespaceSelector:
+    matchNames:
+      - velero
+  selector:
+    matchLabels:
+      component: velero
+      deploy: velero
+  podMetricsEndpoints:
+    - port: metrics
+      path: /metrics
+      interval: 30s

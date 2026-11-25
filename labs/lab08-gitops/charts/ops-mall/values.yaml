@@ -1,0 +1,166 @@
+# ops-mall Chart 默认值。各环境只在 values-staging.yaml / values-prod.yaml 里写差异。
+# 渲染检查：helm template ops-mall labs/lab08-gitops/charts/ops-mall -f labs/lab08-gitops/charts/ops-mall/values-staging.yaml
+
+# 环境名，写进标签和 MALL 日志字段里，方便区分
+environment: dev
+
+# Harbor 的 mall 项目如果是私有的，在每个命名空间建好拉取凭据后填这里
+imagePullSecrets: []
+#  - name: harbor-pull
+
+commonLabels: {}
+
+api:
+  name: mall-api
+  replicas: 2
+  image:
+    repository: harbor.lab.local/mall/mall-api
+    # CI 只改这一个字段（GitOps）
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  containerPort: 8080
+  # 非敏感配置，进 ConfigMap，以环境变量注入
+  config:
+    MALL_LOG_LEVEL: info
+    MALL_CACHE_TTL: 30s
+    MALL_DEBUG: "false"
+    MALL_SHUTDOWN_GRACE: 10s
+  # 用 Redis 缓存时填地址；留空则不启用缓存
+  redisAddr: "redis:6379"
+  # 敏感配置（MALL_DB_DSN、MALL_REDIS_PASSWORD）放在这个 Secret 里，Chart 只引用不创建
+  existingSecret: mall-api-secret
+  # 用 Sealed Secrets 时，把 kubeseal --raw 生成的密文填到 encryptedData，Chart 会渲染 SealedSecret
+  sealedSecret:
+    enabled: false
+    encryptedData: {}
+    #  MALL_DB_DSN: AgB...
+    #  MALL_REDIS_PASSWORD: AgC...
+  # 额外环境变量（会覆盖 ConfigMap 里同名的值），演示故障版本时用
+  extraEnv: []
+  #  - name: MALL_DB_DSN
+  #    value: "mall:wrong@tcp(mysql:3306)/mall"
+  resources:
+    requests:
+      cpu: 50m
+      memory: 64Mi
+    limits:
+      cpu: 500m
+      memory: 256Mi
+  readinessProbe:
+    httpGet:
+      path: /readyz
+      port: http
+    periodSeconds: 5
+    failureThreshold: 3
+  livenessProbe:
+    httpGet:
+      path: /healthz
+      port: http
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    failureThreshold: 3
+  # 收到 SIGTERM 后先等几秒，让网关和 kube-proxy 摘掉这个 Pod，再优雅退出
+  preStopSleepSeconds: 5
+  terminationGracePeriodSeconds: 30
+  podSecurityContext: {}
+  securityContext:
+    allowPrivilegeEscalation: false
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  # 尽量把副本打散到不同节点
+  spreadAcrossNodes: true
+  pdb:
+    enabled: true
+    minAvailable: 1
+  # 需要集群装了 metrics-server
+  hpa:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 6
+    targetCPUUtilizationPercentage: 70
+  # Argo Rollouts 金丝雀发布。enabled=true 时渲染 Rollout 代替 Deployment
+  rollout:
+    enabled: false
+    # none：按副本数比例切流量（不需要额外插件）
+    # gatewayapi：用 Argo Rollouts Gateway API 插件改 HTTPRoute 权重，比例精确
+    trafficRouting: none
+    # 新版本 Pod 在这个时间内没就绪，自动中止并回到稳定版本
+    progressDeadlineSeconds: 300
+    progressDeadlineAbort: true
+    steps:
+      - setWeight: 20
+      - pause: {}
+      - setWeight: 50
+      - pause:
+          duration: 2m
+      - setWeight: 100
+
+web:
+  name: mall-web
+  replicas: 2
+  image:
+    repository: harbor.lab.local/mall/mall-web
+    tag: "v1.0.0"
+    pullPolicy: IfNotPresent
+  containerPort: 80
+  resources:
+    requests:
+      cpu: 20m
+      memory: 32Mi
+    limits:
+      cpu: 200m
+      memory: 128Mi
+  readinessProbe:
+    httpGet:
+      path: /
+      port: http
+    periodSeconds: 5
+  livenessProbe:
+    tcpSocket:
+      port: http
+    periodSeconds: 10
+  podSecurityContext: {}
+  securityContext:
+    allowPrivilegeEscalation: false
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+  spreadAcrossNodes: true
+  pdb:
+    enabled: true
+    minAvailable: 1
+  # Lab 04 镜像启动时用这两个环境变量渲染 /etc/nginx/templates/mall.conf.template。
+  # nginx 的 resolver 不读 search 域，上游必须写完整域名；留空时按 <api.name>.<命名空间>.svc.cluster.local 生成
+  apiUpstream: ""
+  # 集群 DNS 地址，kubeadm 默认 10.96.0.10
+  resolver: 10.96.0.10
+  # 用 ConfigMap 整体替换镜像里的 Nginx 模板（/etc/nginx/templates/mall.conf.template）。
+  # 默认关闭，沿用镜像自带的模板，只通过上面两个环境变量调整
+  nginxConfig:
+    enabled: false
+
+# 网关路由（Gateway API）。Gateway 由 Lab 06 创建，这里只挂 HTTPRoute
+httpRoute:
+  enabled: true
+  hostnames:
+    - mall.lab.local
+  # 共用 Lab 06 的网关（约定：envoy-gateway-system/lab-gateway），挂到 https 监听器
+  parentRefs:
+    - name: lab-gateway
+      namespace: envoy-gateway-system
+      sectionName: https
+  # /api/ 直接到 mall-api，其余到 mall-web；/metrics 不对外暴露
+  apiPathPrefix: /api
+
+# 集群外的 MySQL / Redis（lab-db1），用无选择器 Service + EndpointSlice 接入
+externalServices:
+  enabled: true
+  address: 192.168.56.13
+  mysql:
+    name: mysql
+    port: 3306
+  redis:
+    enabled: true
+    name: redis
+    port: 6379

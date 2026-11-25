@@ -1,0 +1,8 @@
+# 拷到 /etc/ops/mysql-backup.cnf，权限 600、属主 root
+#   sudo install -d -m 750 /etc/ops
+#   sudo install -m 600 mysql-backup.cnf.example /etc/ops/mysql-backup.cnf
+# 和 Lab 03 roles/mysql/templates/mysql-backup.cnf.j2 一致。密码写在文件里，不出现在命令行和 ps 输出里
+[client]
+user=backup
+password="ChangeMe-Backup-123"
+socket=/var/lib/mysql/mysql.sock
