@@ -79,17 +79,20 @@ CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags "-s -w -X main.version=v
 ### 域名（写进每台机器和学员电脑的 hosts）
 | 域名 | 指向 |
 |---|---|
-| `mall.lab.local` | Lab 02-03：VIP 192.168.56.10；Lab 06 起：Ingress 入口 |
+| `mall.lab.local` | Lab 02-03：VIP 192.168.56.10；Lab 06 起：K8s 网关入口 |
 | `harbor.lab.local` | 192.168.56.15 |
 | `gitlab.lab.local` / `jenkins.lab.local` | 192.168.56.16 |
-| `argocd.lab.local` `grafana.lab.local` `prometheus.lab.local` `kibana.lab.local` | K8s Ingress 入口 |
+| `argocd.lab.local` `grafana.lab.local` `prometheus.lab.local` `kibana.lab.local` | K8s 网关入口 |
 
 ## 3. 镜像与 K8s 约定
 - 镜像：`harbor.lab.local/mall/mall-api:<tag>`、`harbor.lab.local/mall/mall-web:<tag>`，tag 用版本号（`v1.0.0`）或 Git 短提交号，**不用 latest**。
 - Dockerfile：`labs/lab04-docker/Dockerfile.api`、`labs/lab04-docker/Dockerfile.web`，构建上下文是仓库根目录。
 - K8s 命名空间：`mall`（应用）、`mall-staging` / `mall-prod`（Lab 08 多环境）、`monitoring`、`logging`、`argocd`。
 - 标签：`app.kubernetes.io/name: mall-api`、`app.kubernetes.io/part-of: ops-mall`。
-- Kubernetes 版本：写作时使用 **v1.36**，容器运行时 containerd。
+- Kubernetes 版本：写作时使用 **v1.36**，容器运行时 containerd，网络插件 Calico。
+- 流量入口：**Gateway API + Envoy Gateway**。Ingress NGINX 已于 2026 年 3 月由 Kubernetes 官方停止维护（不再修复安全漏洞），教程里要讲清这一点：很多公司的存量集群还在用 Ingress / Ingress NGINX，要能看懂和维护，但新集群用 Gateway API。替代方案对比里列出 NGINX Gateway Fabric、Higress、Traefik、Cilium 和云厂商负载均衡。
+- 入口暴露方式：裸机实验集群用 MetalLB（L2 模式）分配 `192.168.56.200-192.168.56.220`，网关拿 `192.168.56.200`；没有 MetalLB 时用 NodePort。
+- 证书：cert-manager，实验用自签 CA（`lab.local` 没法申请公网证书）。
 - 国内网络：`registry.k8s.io`、Docker Hub、GitHub 下载经常不通。每个用到外网镜像或下载的实验，都要写“国内网络怎么办”：kubeadm 用 `--image-repository registry.aliyuncs.com/google_containers`，软件源用阿里云 / 清华镜像，Docker Hub 镜像建议用云厂商镜像仓库或境外 / 香港按量服务器中转。
 
 ## 4. 仓库目录
